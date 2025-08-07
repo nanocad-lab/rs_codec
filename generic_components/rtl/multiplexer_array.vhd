@@ -13,7 +13,7 @@ entity multiplexer_array is
         NUM_OF_ELEMENTS : integer := 4
     );
     port (
-        i_array : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
+        i_array : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
         i_sel : in std_logic_vector(get_log_round(NUM_OF_ELEMENTS)-1 downto 0);   
         o : out std_logic_vector(WORD_LENGTH-1 downto 0)   
     );

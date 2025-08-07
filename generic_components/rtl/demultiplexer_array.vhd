@@ -15,7 +15,7 @@ entity demultiplexer_array is
     port (
         i : in std_logic_vector(WORD_LENGTH-1 downto 0);
         i_sel : in std_logic_vector(get_log_round(NUM_OF_ELEMENTS)-1 downto 0);   
-        o_array : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0)
+        o_array : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)
     );
 end demultiplexer_array;
 

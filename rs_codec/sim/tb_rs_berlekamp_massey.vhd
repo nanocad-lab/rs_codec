@@ -29,11 +29,11 @@ architecture behavioral of tb_rs_berlekamp_massey is
     signal rst : std_logic;
     signal i_fifo_chien_forney_full : std_logic;
     signal i_syndrome_ready : std_logic;
-    signal i_syndrome : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal i_syndrome : std_logic_vector_array(TWO_TIMES_T-1 downto 0);
     signal o_rd_syndrome : std_logic;
     signal o_berlekamp_massey_ready : std_logic;
-    signal o_locator_poly : std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
-    signal o_value_poly : std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal o_locator_poly : std_logic_vector_array(T-1 downto 0);
+    signal o_value_poly : std_logic_vector_array(T-1 downto 0);
 begin
 --Reproducing example in:
 --Clarke, C. K. P. "Reed-Solomon error correction. White Paper WHP 031." 

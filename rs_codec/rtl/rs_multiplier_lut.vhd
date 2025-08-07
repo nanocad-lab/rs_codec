@@ -30,25 +30,25 @@ begin
 		  severity failure;
 		  
     GEN_WORD_LENGTH_2: if WORD_LENGTH = 2 generate
-        o <= std_logic_vector(to_unsigned(mt_2(MULT_CONSTANT)(to_integer(unsigned(i))), WORD_LENGTH));
+        o <= std_logic_vector(to_unsigned(mt_2(MULT_CONSTANT)(to_integer(unsigned(i))) mod (2**WORD_LENGTH), WORD_LENGTH));
     end generate;
     GEN_WORD_LENGTH_3: if WORD_LENGTH = 3 generate
-        o <= std_logic_vector(to_unsigned(mt_3(MULT_CONSTANT)(to_integer(unsigned(i))), WORD_LENGTH));
+        o <= std_logic_vector(to_unsigned(mt_3(MULT_CONSTANT)(to_integer(unsigned(i))) mod (2**WORD_LENGTH), WORD_LENGTH));
     end generate;
     GEN_WORD_LENGTH_4: if WORD_LENGTH = 4 generate
-        o <= std_logic_vector(to_unsigned(mt_4(MULT_CONSTANT)(to_integer(unsigned(i))), WORD_LENGTH));
+        o <= std_logic_vector(to_unsigned(mt_4(MULT_CONSTANT)(to_integer(unsigned(i))) mod (2**WORD_LENGTH), WORD_LENGTH));
     end generate;
     GEN_WORD_LENGTH_5: if WORD_LENGTH = 5 generate
-        o <= std_logic_vector(to_unsigned(mt_5(MULT_CONSTANT)(to_integer(unsigned(i))), WORD_LENGTH));
+        o <= std_logic_vector(to_unsigned(mt_5(MULT_CONSTANT)(to_integer(unsigned(i))) mod (2**WORD_LENGTH), WORD_LENGTH));
     end generate;
     GEN_WORD_LENGTH_6: if WORD_LENGTH = 6 generate
-        o <= std_logic_vector(to_unsigned(mt_6(MULT_CONSTANT)(to_integer(unsigned(i))), WORD_LENGTH));
+        o <= std_logic_vector(to_unsigned(mt_6(MULT_CONSTANT)(to_integer(unsigned(i))) mod (2**WORD_LENGTH), WORD_LENGTH));
     end generate;
     GEN_WORD_LENGTH_7: if WORD_LENGTH = 7 generate
-        o <= std_logic_vector(to_unsigned(mt_7(MULT_CONSTANT)(to_integer(unsigned(i))), WORD_LENGTH));
+        o <= std_logic_vector(to_unsigned(mt_7(MULT_CONSTANT)(to_integer(unsigned(i))) mod (2**WORD_LENGTH), WORD_LENGTH));
     end generate;
     GEN_WORD_LENGTH_8: if WORD_LENGTH = 8 generate
-        o <= std_logic_vector(to_unsigned(mt_8(MULT_CONSTANT)(to_integer(unsigned(i))), WORD_LENGTH));
+        o <= std_logic_vector(to_unsigned(mt_8(MULT_CONSTANT)(to_integer(unsigned(i))) mod (2**WORD_LENGTH), WORD_LENGTH));
     end generate;
     --TODO: WORD_LENGTH 0 and 1 should be covered here as well.
     GEN_WORD_LENGTH_NOT_SUPPORTED: if WORD_LENGTH > 8 generate

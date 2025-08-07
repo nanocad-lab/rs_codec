@@ -50,14 +50,14 @@ architecture behavioral of rs_decoder is
 	 constant T : natural := get_t(TWO_TIMES_T);
 	
 	 --Quartus This cause errro !!
-	 signal one_array : std_logic_vector_array(0 downto 0)(WORD_LENGTH-1 downto 0) ;
+	 signal one_array : std_logic_vector_array(0 downto 0) ;
 	 
     --output INPUT_D_FLOP signals
     signal r_symbol : std_logic_vector(WORD_LENGTH-1 downto 0);
 
     --output rs_SYNDROME_INST signals
     signal w_syndrome_error : std_logic;
-    signal w_syndrome_fifo_input : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_syndrome_fifo_input : std_logic_vector_array(TWO_TIMES_T-1 downto 0);
     signal w_syndrome_valid : std_logic;
     signal w_wr_number_of_symbols : std_logic;
     signal w_wr_symbol : std_logic;
@@ -66,26 +66,26 @@ architecture behavioral of rs_decoder is
     --output SYNDROME_FIFO_ARRAY_INST signals
     signal w_syndrome_fifo_empty : std_logic;
     signal w_syndrome_fifo_full : std_logic;
-    signal w_syndrome_fifo_output : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
-    signal w_syndrome_fifo_output_aux : std_logic_vector_array(0 to TWO_TIMES_T-1)(WORD_LENGTH-1 downto 0);
+    signal w_syndrome_fifo_output : std_logic_vector_array(TWO_TIMES_T-1 downto 0);
+    signal w_syndrome_fifo_output_aux : std_logic_vector_array(0 to TWO_TIMES_T-1);
 
     --output rs_EUCLIDEAN_INST signals
     signal w_euclidean_error : std_logic;
     signal w_rd_syndrome : std_logic;
     signal w_wr_bm : std_logic;
-    signal w_chien_fifo_input_ref : std_logic_vector_array(T downto 0)(WORD_LENGTH-1 downto 0);
-    signal w_chien_fifo_input : std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
-    signal w_forney_fifo_input : std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_chien_fifo_input_ref : std_logic_vector_array(T downto 0);
+    signal w_chien_fifo_input : std_logic_vector_array(T-1 downto 0);
+    signal w_forney_fifo_input : std_logic_vector_array(T-1 downto 0);
    
     --output CHIEN_FIFO_ARRAY_INST signals
     signal w_chien_fifo_empty : std_logic;
     signal w_chien_fifo_full : std_logic;
-    signal w_chien_fifo_output : std_logic_vector_array(T downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_chien_fifo_output : std_logic_vector_array(T downto 0);
 
     --output FORNEY_FIFO_ARRAY_INST signals
     signal w_forney_fifo_empty : std_logic;
     signal w_forney_fifo_full : std_logic;
-    signal w_forney_fifo_output : std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_forney_fifo_output : std_logic_vector_array(T-1 downto 0);
 
     --output rs_CHIEN_FORNEY_INST signals
     signal w_chien_forney_error : std_logic;
@@ -105,12 +105,31 @@ architecture behavioral of rs_decoder is
     signal w_number_of_symbols_fifo_output : std_logic_vector(WORD_LENGTH-1 downto 0);
 	 
 	 signal w_error : std_logic;
+	 
+	 -- Intermediate signals for Boolean expressions (synthesis compatibility)
+	 signal w_fifo_chien_forney_full : std_logic;
+	 signal w_syndrome_ready : std_logic;
+	 signal w_reset_combined : std_logic;
+	 signal w_rd_enable_1 : std_logic;
+	 signal w_rd_enable_2 : std_logic;
+	 signal w_error_detection_ready : std_logic;
 
 begin
 
 	 assert (K < N) 
 		  report "ASSERT FAILURE - K cannot be >= N" 
 		  severity failure;
+		  
+	 -- Assign intermediate signals for Boolean expressions
+	 w_fifo_chien_forney_full <= w_chien_fifo_full or w_forney_fifo_full;
+	 w_syndrome_ready <= not w_syndrome_fifo_empty;
+	 w_reset_combined <= rst or w_wr_number_of_symbols;
+	 w_rd_enable_1 <= w_rd_symbol and not w_error;
+	 w_rd_enable_2 <= w_rd_symbol and not w_error;
+	 w_error_detection_ready <= (not w_chien_fifo_empty) and 
+	                            (not w_forney_fifo_empty) and
+	                            (not w_symbol_fifo_empty) and 
+	                            (not w_number_of_symbols_fifo_empty);
 	 
     INPUT_ASYNC_DFF: async_dff
                      generic map (WORD_LENGTH => WORD_LENGTH) 
@@ -163,8 +182,8 @@ begin
                                           TEST_MODE => TEST_MODE)
                               port map(clk => clk,
                                        rst => rst,
-                                       i_fifo_chien_forney_full => w_chien_fifo_full or w_forney_fifo_full,
-                                       i_syndrome_ready => not w_syndrome_fifo_empty,
+                                       i_fifo_chien_forney_full => w_fifo_chien_forney_full,
+                                       i_syndrome_ready => w_syndrome_ready,
                                        i_syndrome => w_syndrome_fifo_output_aux,
                                        o_rd_syndrome => w_rd_syndrome, 
                                        o_berlekamp_massey_ready => w_wr_bm,
@@ -223,10 +242,7 @@ begin
                            port map(clk => clk,
                                     rst => rst,
                                     i_consume => i_consume,
-                                    i_fifos_ready => (not w_chien_fifo_empty) and 
-                                                     (not w_forney_fifo_empty) and
-                                                     (not w_symbol_fifo_empty) and 
-                                                     (not w_number_of_symbols_fifo_empty),
+                                    i_fifos_ready => w_error_detection_ready,
                                     i_number_of_symbols => w_number_of_symbols_fifo_output,
                                     i_chien => w_chien_fifo_output,
                                     i_forney => w_forney_fifo_output,
@@ -247,7 +263,7 @@ begin
                             generic map(WORD_LENGTH => WORD_LENGTH,
                                         CASCADE_LENGTH => N - K)
                             port map(clk => clk,
-                                     rst => rst or w_wr_number_of_symbols,
+                                     rst => w_reset_combined,
                                      i_valid => w_wr_symbol, 
                                      i_data => r_symbol,
                                      o_valid => r_o_cascade_valid,
@@ -262,7 +278,7 @@ begin
                                     i_wr_en => r_o_cascade_valid,
                                     i_wr_data => r_o_cascade_data,
                                     o_full => w_symbol_fifo_full,
-                                    i_rd_en => w_rd_symbol and not w_error,
+                                    i_rd_en => w_rd_enable_1,
                                     o_rd_data => w_symbol_fifo_output,
                                     o_empty => w_symbol_fifo_empty);
     end generate;
@@ -277,7 +293,7 @@ begin
                                     i_wr_en => w_wr_symbol,
                                     i_wr_data => r_symbol,
                                     o_full => w_symbol_fifo_full,
-                                    i_rd_en => w_rd_symbol and not w_error,
+                                    i_rd_en => w_rd_enable_1,
                                     o_rd_data => w_symbol_fifo_output,
                                     o_empty => w_symbol_fifo_empty);
     end generate;               

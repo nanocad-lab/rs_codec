@@ -210,11 +210,11 @@ entity rs_euclidean_unit is
         i_sync_rst : in std_logic;
         i_swap : in std_logic;
         i_num_shift : in integer range 0 to TWO_TIMES_T;
-        i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+        i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
         o_div_shift_zeros : out integer range 0 to 2**get_szs(TWO_TIMES_T)-1;
         o_rem_shift_zeros : out integer range 0 to 2**get_szs(TWO_TIMES_T)-1;
-        o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0);
-        o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0)
+        o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0);
+        o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)
     );
 end rs_euclidean_unit;
 
@@ -222,8 +222,8 @@ architecture behavioral of rs_euclidean_unit is
     constant SHIFTED_ZEROS_SIZE : natural := get_szs(TWO_TIMES_T);
     signal w_quocient : std_logic_vector(WORD_LENGTH-1 downto 0);
     signal w_num_shift : std_logic_vector(TWO_TIMES_T-1 downto 0);
-    signal w_chien : std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0);
-    signal w_forney : std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_chien : std_logic_vector_array(TWO_TIMES_T-2 downto 0);
+    signal w_forney : std_logic_vector_array(TWO_TIMES_T-3 downto 0);
 begin
     ACC_UNIT: rs_euclidean_acc_unit
               generic map(WORD_LENGTH => WORD_LENGTH, 
@@ -284,12 +284,12 @@ entity rs_euclidean is
         rst : in std_logic;
         i_fifo_chien_forney_full : in std_logic;
         i_syndrome_ready : in std_logic;
-        i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+        i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
         o_error : out std_logic;
         o_rd_syndrome : out std_logic;
         o_wr_euclidean : out std_logic;
-        o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0);
-        o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0)
+        o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0);
+        o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)
     );
 end rs_euclidean;
 
@@ -305,11 +305,11 @@ architecture behavioral of rs_euclidean is
             i_sync_rst : in std_logic;
             i_swap : in std_logic;
             i_num_shift : in integer range 0 to TWO_TIMES_T;
-            i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+            i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
             o_div_shift_zeros : out integer range 0 to 2**get_szs(TWO_TIMES_T)-1;
             o_rem_shift_zeros : out integer range 0 to 2**get_szs(TWO_TIMES_T)-1;
-            o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0);
-            o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0)
+            o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0);
+            o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)
         );
     end component;
 

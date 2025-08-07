@@ -29,7 +29,7 @@ architecture behavioral of tb_rs_encoder_wrapper is
     signal o_in_ready : std_logic;
     signal o_valid : std_logic;
     signal o_symbol : std_logic_vector(WORD_LENGTH-1 downto 0);
-    signal o_syndrome : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal o_syndrome : std_logic_vector_array(TWO_TIMES_T-1 downto 0);
 begin
     UUT: rs_encoder_wrapper
          generic map(N => N, 

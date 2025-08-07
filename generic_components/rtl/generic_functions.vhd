@@ -40,7 +40,7 @@ package body GENERIC_FUNCTIONS is
 	 end;
 
     function get_even_indexes(slva: std_logic_vector_array; WORD_LENGTH: natural) return std_logic_vector_array is
-        variable slva_even : std_logic_vector_array((slva'length+1)/2-1 downto 0)(WORD_LENGTH-1 downto 0);
+        variable slva_even : std_logic_vector_array((slva'length+1)/2-1 downto 0);
     begin
         if (slva'length = 1) then 
             slva_even := slva;
@@ -53,10 +53,13 @@ package body GENERIC_FUNCTIONS is
     end function;
 
     function get_odd_indexes(slva: std_logic_vector_array; WORD_LENGTH: natural) return std_logic_vector_array is
-        variable slva_odd : std_logic_vector_array(slva'length/2-1 downto 0)(WORD_LENGTH-1 downto 0);
+        variable slva_odd : std_logic_vector_array(slva'length/2-1 downto 0);
     begin
         if (slva'length = 1) then 
-            slva_odd := (others => std_logic_vector(to_unsigned(0, WORD_LENGTH)));
+            for j in slva_odd'range loop
+                slva_odd(j)(WORD_LENGTH-1 downto 0) := std_logic_vector(to_unsigned(0, WORD_LENGTH));
+                slva_odd(j)(9 downto WORD_LENGTH) := (others => '0');
+            end loop;
         else
             for i in 0 to slva'length/2-1 loop
                 slva_odd(i) := slva(i*2 + 1);
@@ -80,10 +83,11 @@ package body GENERIC_FUNCTIONS is
     end function;
 
     function to_slva(slv: std_logic_vector; WORD_LENGTH: natural) return std_logic_vector_array is
-        variable slva : std_logic_vector_array(slv'length/WORD_LENGTH-1 downto 0)(WORD_LENGTH-1 downto 0);
+        variable slva : std_logic_vector_array(slv'length/WORD_LENGTH-1 downto 0);
     begin
         for i in slva'range loop
-            slva(i) := slv((i * WORD_LENGTH) + WORD_LENGTH-1 downto (i * WORD_LENGTH));
+            slva(i)(WORD_LENGTH-1 downto 0) := slv((i * WORD_LENGTH) + WORD_LENGTH-1 downto (i * WORD_LENGTH));
+            slva(i)(9 downto WORD_LENGTH) := (others => '0');
         end loop;
         return slva;
     end function;
@@ -98,10 +102,11 @@ package body GENERIC_FUNCTIONS is
     end function;
 
     function int_array_to_std_vector_array(int_array: integer_array; NUM_OF_ELEMENTS: integer; LENGTH: integer) return std_logic_vector_array is
-        variable ret : std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(LENGTH-1 downto 0);
+        variable ret : std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
     begin
         for i in int_array'range loop
-            ret(i) := std_logic_vector(to_unsigned(int_array(i), LENGTH));
+            ret(i)(LENGTH-1 downto 0) := std_logic_vector(to_unsigned(int_array(i), LENGTH));
+            ret(i)(9 downto LENGTH) := (others => '0');
         end loop;
         return ret;
     end function;

@@ -37,7 +37,7 @@ entity rs_decoder_plus_syndrome is
             o_symbol : out std_logic_vector(get_word_length_from_rs_gf(N, RS_GF)-1 downto 0);   
             --Verification signals
             i_save_symbol : in std_logic;         
-            o_syndrome : out std_logic_vector_array(N-K-1 downto 0)(get_word_length_from_rs_gf(N, RS_GF)-1 downto 0)
+            o_syndrome : out std_logic_vector_array(N-K-1 downto 0)
         );
 end rs_decoder_plus_syndrome;
 

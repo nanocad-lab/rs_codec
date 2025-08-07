@@ -17,7 +17,7 @@ entity rs_reduce_adder is
         WORD_LENGTH : natural range 1 to 10
     );
 	port (
-        i : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
+        i : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
         o : out std_logic_vector(WORD_LENGTH-1 downto 0)
     );
 end rs_reduce_adder;

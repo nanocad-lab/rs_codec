@@ -52,6 +52,9 @@ architecture behavior of rs_encoder is
 	signal w_select_parity_symbols : std_logic;
 	signal w_stall : std_logic;
 	signal r_stall : std_logic;
+	
+	-- Intermediate signal for Boolean expressions (synthesis compatibility)
+	signal w_stall_combined : std_logic;
 
 	--output OUTPUT_D_FLOP signals
 	constant OUTPUT_SIZE : natural := 5+WORD_LENGTH-1;
@@ -105,6 +108,9 @@ architecture behavior of rs_encoder is
 		);
 	end component;
 begin
+	-- Assign intermediate signals for Boolean expressions (synthesis compatibility)
+	w_stall_combined <= (r_stall and not w_select_parity_symbols) or (w_stall and w_select_parity_symbols);
+	
 	w_dff_selector <= i_symbol when (w_stall = '0') else r_symbol;
 	INPUT_ASYNC_DFF: async_dff 
                   	 generic map (WORD_LENGTH => WORD_LENGTH) 
@@ -142,7 +148,7 @@ begin
 					 port map (clk => clk,
 					 		   rst => rst,
 							   i_select_parity_symbols => w_select_parity_symbols,
-                               i_stall => (r_stall and not w_select_parity_symbols) or (w_stall and w_select_parity_symbols),
+                               i_stall => w_stall_combined,
 							   i_symbol => r_symbol,
 							   o_symbol => o_symbol);
 end behavior;
@@ -391,12 +397,12 @@ architecture behavioral of rs_encoder_unit is
 	--output GEN_rs_REMAINDER signals
     signal w_feedback : std_logic_vector(WORD_LENGTH-1 downto 0);
 
-	signal r_cascade_outputs : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+	signal r_cascade_outputs : std_logic_vector_array(TWO_TIMES_T-1 downto 0);
 begin
     END_ADDER: rs_adder 
 			   generic map (WORD_LENGTH => WORD_LENGTH,
 			   			    TEST_MODE => TEST_MODE)
-               port map (i1 => r_cascade_outputs(TWO_TIMES_T-1),
+               port map (i1 => r_cascade_outputs(TWO_TIMES_T-1)(WORD_LENGTH-1 downto 0),
                          i2 => i_symbol,
                          o => w_end_adder);
 
@@ -410,7 +416,7 @@ begin
                     port map (i => w_feedback, 
                               o => w_fst_multiplier);
 
-    w_fst_multiplier_selector <= r_cascade_outputs(0) when (i_stall = '1')
+    w_fst_multiplier_selector <= r_cascade_outputs(0)(WORD_LENGTH-1 downto 0) when (i_stall = '1')
                                                       else w_fst_multiplier;
 
     FST_ASYCN_DFF: async_dff 
@@ -418,7 +424,12 @@ begin
                    port map (clk => clk,
 					     	 rst => rst,
 						  	 d => w_fst_multiplier_selector,
-                          	 q => r_cascade_outputs(0));
+                          	 q => r_cascade_outputs(0)(WORD_LENGTH-1 downto 0));
+
+    -- Zero out unused bits for synthesis compatibility
+    GEN_ZERO_UNUSED: for I in 0 to TWO_TIMES_T-1 generate
+        r_cascade_outputs(I)(9 downto WORD_LENGTH) <= (others => '0');
+    end generate;
 
     GEN_RS_REMAINDER: for I in 0 to TWO_TIMES_T-2 generate
         RS_REMAINDER: rs_remainder_unit
@@ -429,10 +440,10 @@ begin
 					  			rst => rst,
                                 i_stall => i_stall,
                                 i_symbol => w_feedback,
-                                i_upper_lv => r_cascade_outputs(I),
-                                o => r_cascade_outputs(I+1));
+                                i_upper_lv => r_cascade_outputs(I)(WORD_LENGTH-1 downto 0),
+                                o => r_cascade_outputs(I+1)(WORD_LENGTH-1 downto 0));
     end generate GEN_RS_REMAINDER;
 
     o_symbol <= i_symbol when (i_select_parity_symbols = '0') 
-					     else r_cascade_outputs(TWO_TIMES_T-1);
+					     else r_cascade_outputs(TWO_TIMES_T-1)(WORD_LENGTH-1 downto 0);
 end behavioral;

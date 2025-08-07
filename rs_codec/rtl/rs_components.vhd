@@ -169,7 +169,7 @@ package RS_COMPONENTS is
             o_start_codeword : out std_logic;
             o_valid : out std_logic;
 			o_symbol : out std_logic_vector(get_word_length_from_rs_gf(N, RS_GF)-1 downto 0);            
-            o_syndrome : out std_logic_vector_array(N-K-1 downto 0)(get_word_length_from_rs_gf(N, RS_GF)-1 downto 0)
+            o_syndrome : out std_logic_vector_array(N-K-1 downto 0)
         );
     end component;
 
@@ -185,7 +185,7 @@ package RS_COMPONENTS is
             i_select_input : in std_logic;
             i_stall : in std_logic;
             i_derivative : in std_logic_vector(WORD_LENGTH-1 downto 0);	
-            i_terms : in std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+            i_terms : in std_logic_vector_array(T-1 downto 0);
             o_symbol_correction : out std_logic_vector(WORD_LENGTH-1 downto 0)
         );
     end component;
@@ -200,7 +200,7 @@ package RS_COMPONENTS is
             clk : in std_logic;
             i_select_input : in std_logic;
             i_stall : in std_logic;
-            i_terms : in std_logic_vector_array(T downto 0)(WORD_LENGTH-1 downto 0);         
+            i_terms : in std_logic_vector_array(T downto 0);         
             o_has_error : out std_logic;
             o_derivative : out std_logic_vector(WORD_LENGTH-1 downto 0)
         );
@@ -219,8 +219,8 @@ package RS_COMPONENTS is
               i_consume : in std_logic;
               i_fifos_ready : in std_logic;
 			  i_number_of_symbols : in std_logic_vector(WORD_LENGTH-1 downto 0);
-			  i_chien : in std_logic_vector_array(get_t(TWO_TIMES_T) downto 0)(WORD_LENGTH-1 downto 0);
-			  i_forney : in std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)(WORD_LENGTH-1 downto 0);
+			  i_chien : in std_logic_vector_array(get_t(TWO_TIMES_T) downto 0);
+			  i_forney : in std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0);
 			  o_end_codeword : out std_logic;
 			  o_error : out std_logic;
 			  o_rd_chien_forney : out std_logic;
@@ -257,7 +257,7 @@ package RS_COMPONENTS is
             o_wr_number_of_symbols : out std_logic;
             o_wr_symbol : out std_logic;
             o_number_of_symbols : out std_logic_vector(WORD_LENGTH-1 downto 0);
-            o_syndrome : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0)
+            o_syndrome : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)
         );
     end component;
 
@@ -271,12 +271,12 @@ package RS_COMPONENTS is
         rst : in std_logic;
         i_fifo_chien_forney_full : in std_logic;
         i_syndrome_ready : in std_logic;
-        i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+        i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
         o_error : out std_logic;
         o_rd_syndrome : out std_logic;
         o_wr_euclidean : out std_logic;
-        o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0);
-        o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0)
+        o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0);
+        o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)
     );
     end component;
 
@@ -312,9 +312,9 @@ package RS_COMPONENTS is
 			TWO_TIMES_T : natural range 1 to 1022
         );
         port (
-            i_shifter : in std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0);
+            i_shifter : in std_logic_vector_array(TWO_TIMES_T-3 downto 0);
             i_num_shift : in integer range 0 to TWO_TIMES_T;
-            o_shifter : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0)
+            o_shifter : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)
         );
     end component;
 
@@ -324,9 +324,9 @@ package RS_COMPONENTS is
 			TWO_TIMES_T : natural range 1 to 1022
         );
         port (
-            i_shifter : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+            i_shifter : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
             o_num_shift_zeros : out integer range 0 to 2**get_szs(TWO_TIMES_T)-1;
-            o_shifter : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0)
+            o_shifter : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)
         );
     end component;
 
@@ -342,7 +342,7 @@ package RS_COMPONENTS is
 			  i_swap : in std_logic;
 			  i_num_shift : integer range 0 to TWO_TIMES_T;
 			  i_quocient : in std_logic_vector(WORD_LENGTH-1 downto 0);
-			  o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0)
+			  o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)
 		 );
     end component;
 
@@ -356,11 +356,11 @@ package RS_COMPONENTS is
 			  rst : in std_logic;
 			  i_sync_rst : in std_logic;
 			  i_swap : in std_logic;
-			  i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+			  i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
 			  o_div_shift_zeros : out integer range 0 to 2**get_szs(TWO_TIMES_T)-1;
 			  o_rem_shift_zeros : out integer range 0 to 2**get_szs(TWO_TIMES_T)-1;
 			  o_quocient : out std_logic_vector(WORD_LENGTH-1 downto 0);
-			  o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0)
+			  o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)
 		 );
     end component;
 
@@ -370,7 +370,7 @@ package RS_COMPONENTS is
             WORD_LENGTH : natural range 1 to 10
         );
         port (
-            i : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
+            i : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
             o : out std_logic_vector(WORD_LENGTH-1 downto 0)
         );
     end component;
@@ -386,11 +386,11 @@ package RS_COMPONENTS is
             rst : in std_logic;
             i_fifo_chien_forney_full : in std_logic;
             i_syndrome_ready : in std_logic;
-            i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+            i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
             o_rd_syndrome : out std_logic;
             o_berlekamp_massey_ready : out std_logic;
-			o_locator_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)(WORD_LENGTH-1 downto 0);
-            o_value_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)(WORD_LENGTH-1 downto 0)
+			o_locator_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0);
+            o_value_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)
         );
     end component;
     
@@ -406,7 +406,7 @@ package RS_COMPONENTS is
             i_select_feedback : in std_logic;
             i_stall : in std_logic;
             i_symbol : in std_logic_vector(WORD_LENGTH-1 downto 0);
-            o_syndrome : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0)
+            o_syndrome : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)
         );
     end component;
 

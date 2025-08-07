@@ -18,13 +18,13 @@ entity config_dff_array is
     port (
         clk : in std_logic;
         en : in std_logic;
-        d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
-        q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0)
+        d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
+        q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)
     );
 end config_dff_array;
 
 architecture behavioral of config_dff_array is
-signal w_q : std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
+signal w_q : std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
     
 begin 
     process (clk) 

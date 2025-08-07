@@ -33,7 +33,7 @@ entity rs_encoder_wrapper is
             o_start_codeword : out std_logic;
             o_valid : out std_logic;
 			o_symbol : out std_logic_vector(get_word_length_from_rs_gf(N, RS_GF)-1 downto 0);            
-            o_syndrome : out std_logic_vector_array(N-K-1 downto 0)(get_word_length_from_rs_gf(N, RS_GF)-1 downto 0)
+            o_syndrome : out std_logic_vector_array(N-K-1 downto 0)
         );
 end entity;
 

@@ -14,9 +14,9 @@ entity rs_shifter_acc is
         TWO_TIMES_T : natural range 1 to 1022
     );
     port (
-        i_shifter : in std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0);
+        i_shifter : in std_logic_vector_array(TWO_TIMES_T-3 downto 0);
         i_num_shift : in integer range 0 to TWO_TIMES_T;
-        o_shifter : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0)
+        o_shifter : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)
     );
 end rs_shifter_acc;
 

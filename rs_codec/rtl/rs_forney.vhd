@@ -22,7 +22,7 @@ entity rs_forney is
             i_select_input : in std_logic;
             i_stall : in std_logic;
             i_derivative : in std_logic_vector(WORD_LENGTH-1 downto 0);	
-            i_terms : in std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+            i_terms : in std_logic_vector_array(T-1 downto 0);
             o_symbol_correction : out std_logic_vector(WORD_LENGTH-1 downto 0)
         );
 end rs_forney;
@@ -31,10 +31,10 @@ architecture behavioral of rs_forney is
     constant word_zero : std_logic_vector(WORD_LENGTH-1 downto 0) := (others => '0');
     signal w_inverter : std_logic_vector(WORD_LENGTH-1 downto 0);
     signal w_full_mult : std_logic_vector(WORD_LENGTH-1 downto 0);
-    signal w_selector : std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
-    signal w_multiplier : std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
-    signal w_flop : std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
-    signal r_flop : std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_selector : std_logic_vector_array(T-1 downto 0);
+    signal w_multiplier : std_logic_vector_array(T-1 downto 0);
+    signal w_flop : std_logic_vector_array(T-1 downto 0);
+    signal r_flop : std_logic_vector_array(T-1 downto 0);
     signal w_sum : std_logic_vector(WORD_LENGTH-1 downto 0);
 begin
 	assert (T <= 2**WORD_LENGTH-2) 
