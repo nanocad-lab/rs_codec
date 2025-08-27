@@ -16,7 +16,7 @@ entity rs_encoder_wrapper is
         generic (
             N : natural range 2 to 1023;
 			K : natural range 1 to 1022;
-            RS_GF : RSGFSize := RS_GF_NONE;
+            RS_GF : RSGFSize := RS_GF_16;
             TEST_MODE : boolean := false
         );
         port (
