@@ -8,7 +8,6 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.all;
 library work;
-use work.GENERIC_TYPES.std_logic_vector_array;
 
 entity rs_full_multiplier_core is
     generic (
@@ -22,7 +21,9 @@ entity rs_full_multiplier_core is
 end rs_full_multiplier_core;
 
 architecture behavioral of rs_full_multiplier_core is
-    signal w_and_out : std_logic_vector_array(0 to WORD_LENGTH-1);
+    subtype word_t is std_logic_vector(WORD_LENGTH-1 downto 0);
+    type slv_array is array (natural range <>) of word_t;
+    signal w_and_out : slv_array(0 to WORD_LENGTH-1);
     signal w_factors_overflow : std_logic_vector(WORD_LENGTH-2 downto 0);
 begin
     --generate all combinations of AND operation

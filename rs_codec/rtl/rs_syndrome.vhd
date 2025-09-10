@@ -364,6 +364,6 @@ begin
                                            i_select_feedback => i_select_feedback,
                                            i_stall => i_stall,
                                            i_symbol => i_symbol,
-                                           o_syndrome => o_syndrome(I));
+                                           o_syndrome => o_syndrome(I)(WORD_LENGTH-1 downto 0));
     end generate GEN_RS_SYNDROME_UNIT;
 end behavioral;

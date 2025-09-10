@@ -252,7 +252,7 @@ end rs_berlekamp_massey_unit;
 architecture behavioral of rs_berlekamp_massey_unit is
 	constant T : natural := get_t(TWO_TIMES_T);
     constant c_reset_syndrome_shifter: std_logic_vector_array(T-1 downto 0) := 
-        (others => std_logic_vector(to_unsigned(0, WORD_LENGTH)));
+        (others => (others => '0'));
     -- Initialize connection shifter with first element = 1, others = 0
     function init_connection_shifter(T: natural; WORD_LENGTH: natural) return std_logic_vector_array is
         variable temp : std_logic_vector_array(T-1 downto 0);
@@ -334,7 +334,7 @@ begin
                                        q => r_syndrome);
 
     --Only a selector for r_syndrome array that depends on an indexer driven by an input port.
-    w_indexed_syndrome <= r_syndrome(i_syndrome_indexer);
+    w_indexed_syndrome <= r_syndrome(i_syndrome_indexer)(WORD_LENGTH-1 downto 0);
 
     FIRST_SYNDROME_REG: sync_dff
                         generic map (WORD_LENGTH => WORD_LENGTH)
@@ -356,18 +356,19 @@ begin
         SYNDROME_TIMES_LOCATION_MULT: rs_full_multiplier
                                       generic map (WORD_LENGTH => WORD_LENGTH,
                                                    TEST_MODE => TEST_MODE)
-                                      port map (i1 => r_syndrome_shifter(I),
-                                                i2 => r_location_poly(I),
-                                                o => w_syndrome_times_location(I));  
+                                      port map (i1 => r_syndrome_shifter(I)(WORD_LENGTH-1 downto 0),
+                                                i2 => r_location_poly(I)(WORD_LENGTH-1 downto 0),
+                                                o => w_syndrome_times_location(I)(WORD_LENGTH-1 downto 0));  
     end generate GEN_SYNDROME_TIMES_LOCATION;
 
 	w_reduce_adder(T downto 1) <= w_syndrome_times_location;
-    w_reduce_adder(0) <= r_first_syndrome;
+    w_reduce_adder(0)(WORD_LENGTH-1 downto 0) <= r_first_syndrome;
+    w_reduce_adder(0)(9 downto WORD_LENGTH) <= (others => '0');
     
     REDUCE_ADDER: rs_reduce_adder
                   generic map(NUM_OF_ELEMENTS => T + 1,
                               WORD_LENGTH => WORD_LENGTH)
-				  port map(i => w_reduce_adder,
+                  port map(i => w_reduce_adder,
                            o => w_discrepancy);
 
     process (i_syndrome_indexer, w_discrepancy, r_2l)
@@ -428,19 +429,19 @@ begin
                            generic map (WORD_LENGTH => WORD_LENGTH,
                                         TEST_MODE => TEST_MODE)
                            port map (i1 => w_mult_discrepancy,
-                                     i2 => r_connection_shifter(I),
-                                     o => w_location_mult(I));
+                                     i2 => r_connection_shifter(I)(WORD_LENGTH-1 downto 0),
+                                     o => w_location_mult(I)(WORD_LENGTH-1 downto 0));
 
             LOCATTION_ADDER: rs_adder
                              generic map (WORD_LENGTH => WORD_LENGTH,
                                           TEST_MODE => TEST_MODE)
-                             port map (i1 => w_location_mult(I),
-                                       i2 => r_location_poly(I),
-                                       o => w_location_adder(I));   
+                             port map (i1 => w_location_mult(I)(WORD_LENGTH-1 downto 0),
+                                       i2 => r_location_poly(I)(WORD_LENGTH-1 downto 0),
+                                       o => w_location_adder(I)(WORD_LENGTH-1 downto 0));   
         end generate GEN_LOCATION_POLY_LOGIC;
 
 		w_connection_shifter(T-1 downto 1) <= r_location_poly(T-2 downto 0);
-		w_connection_shifter(0) <= std_logic_vector(to_unsigned(1, WORD_LENGTH));
+		w_connection_shifter(0)(WORD_LENGTH-1 downto 0) <= std_logic_vector(to_unsigned(1, WORD_LENGTH));
         CONNECTION_SHIFTER: register_feedback_shifter
                             generic map (NUM_OF_ELEMENTS => T,
                                          WORD_LENGTH => WORD_LENGTH)
@@ -455,9 +456,9 @@ begin
             LOCATTION_ADDER: rs_adder
                              generic map (WORD_LENGTH => WORD_LENGTH,
                                           TEST_MODE => TEST_MODE)
-                             port map (i1 => r_location_poly(0),
+                             port map (i1 => r_location_poly(0)(WORD_LENGTH-1 downto 0),
                                        i2 => w_mult_discrepancy,
-                                       o => w_location_adder(0));   
+                                       o => w_location_adder(0)(WORD_LENGTH-1 downto 0));   
         
     end generate;
 
@@ -477,7 +478,7 @@ begin
                     r_value_poly(I) <= (others => '0');
                 end loop;
             elsif (i_value_poly_phase = '1' and i_syndrome_indexer >= 1) then
-                r_value_poly(i_syndrome_indexer - 1) <= w_discrepancy;
+                r_value_poly(i_syndrome_indexer - 1)(WORD_LENGTH-1 downto 0) <= w_discrepancy;
             end if;
         end if;   
     end process;

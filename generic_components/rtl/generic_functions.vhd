@@ -136,7 +136,7 @@ package body GENERIC_FUNCTIONS is
         variable ret : std_logic_vector(WORD_LENGTH-1 downto 0) := (others => '0');
     begin
         for i in array_input'range loop
-            ret := ret xor array_input(i);
+            ret := ret xor array_input(i)(WORD_LENGTH-1 downto 0);
         end loop;
         return ret;
     end function;

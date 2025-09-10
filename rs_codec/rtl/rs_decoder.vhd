@@ -207,7 +207,7 @@ begin
     --rs_EUCLIDEAN_INST END
 	 
 	w_chien_fifo_input_ref(T downto 1) <= w_chien_fifo_input;
-	w_chien_fifo_input_ref(0) <= std_logic_vector(to_unsigned(1, WORD_LENGTH));
+		w_chien_fifo_input_ref(0)(WORD_LENGTH-1 downto 0) <= std_logic_vector(to_unsigned(1, WORD_LENGTH));
     CHIEN_FIFO_ARRAY_INST : reg_fifo_array
                             generic map(ARRAY_WIDTH => T + 1, 
                                         NUM_OF_ELEMENTS => 1, 

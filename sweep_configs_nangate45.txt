@@ -1,0 +1,15 @@
+# RS Codec Synthesis Configuration File for Nangate45
+# Format: N K GF clock [library] [block]
+# 
+# N     - Codeword length (15, 31, 63, etc.)
+# K     - Information length (11, 21, 51, etc.) 
+# GF    - Symbol bit width (2..10). Example: 4 => GF(2^4)=GF16
+# clock - Target clock period in ps
+# library - Library path (optional, uses default if not specified)
+# block - Block to synthesize (optional). Supported: rs_encoder_wrapper, rs_syndrome,
+#         rs_decoder_plus_syndrome (alias of rs_decoder)
+
+# Basic RS(15,11) configurations with 8 ns clock at typical corner
+15 11 4 8000.0 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
+15 11 4 8000.0 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
+15 11 4 8000.0 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder_plus_syndrome
