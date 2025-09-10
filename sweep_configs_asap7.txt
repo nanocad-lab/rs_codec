@@ -1,0 +1,15 @@
+# RS Codec Synthesis Configuration File for ASAP7
+# Format: N K GF clock [library] [block]
+# 
+# N     - Codeword length (15, 31, 63, etc.)
+# K     - Information length (11, 21, 51, etc.) 
+# GF    - Symbol bit width (2..10). Example: 4 => GF(2^4)=GF16
+# clock - Target clock period in ps
+# library - Library path (optional, uses default if not specified)
+# block - Block to synthesize (optional). Supported: rs_encoder_wrapper, rs_syndrome,
+#         rs_decoder_plus_syndrome (alias of rs_decoder)
+
+# Basic RS(15,11) configurations with different clock targets - TT libraries
+15 11 4 2500.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_encoder_wrapper
+15 11 4 2500.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_syndrome
+15 11 4 2500.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder_plus_syndrome

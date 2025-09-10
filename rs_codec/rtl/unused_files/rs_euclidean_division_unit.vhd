@@ -24,43 +24,43 @@ entity rs_euclidean_division_unit is
         rst : in std_logic;
         i_sync_rst : in std_logic;
         i_swap : in std_logic;
-        i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+        i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
         o_div_shift_zeros : out integer range 0 to 2**get_szs(TWO_TIMES_T)-1;
         o_rem_shift_zeros : out integer range 0 to 2**get_szs(TWO_TIMES_T)-1;
         o_quocient : out std_logic_vector(WORD_LENGTH-1 downto 0);
-        o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0)
+        o_forney : out std_logic_vector_array(TWO_TIMES_T-3 downto 0)
     );
 end rs_euclidean_division_unit;
 
 architecture behavior of rs_euclidean_division_unit is
     constant SHIFTED_ZEROS_SIZE : natural := get_szs(TWO_TIMES_T);
     --output ZERO_DIV_SHIFTER signals
-    signal w_zero_div_shifter : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_zero_div_shifter : std_logic_vector_array(TWO_TIMES_T-1 downto 0);
 
     --output ZERO_REM_SHIFTER signals
-    signal w_zero_rem_shifter : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
-    signal w_flop_dividend_input : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);        
+    signal w_zero_rem_shifter : std_logic_vector_array(TWO_TIMES_T-1 downto 0);
+    signal w_flop_dividend_input : std_logic_vector_array(TWO_TIMES_T-1 downto 0);        
 
     --output GEN_rs_DIV_UNIT signals
-    signal w_selector_divisor : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);        
+    signal w_selector_divisor : std_logic_vector_array(TWO_TIMES_T-1 downto 0);        
 
     --output D_FLOP_DIVISOR signals
-    signal r_divisor : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal r_divisor : std_logic_vector_array(TWO_TIMES_T-1 downto 0);
 
     --output GEN_rs_MULT signals
     signal w_inverter : std_logic_vector(WORD_LENGTH-1 downto 0);
 
     --output FULL_MULT signals
-    signal w_mult : std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_mult : std_logic_vector_array(TWO_TIMES_T-2 downto 0);
 
     --output GEN_rs_DIVIDEND_MUX signals
-    signal w_selector_dividend : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);    
+    signal w_selector_dividend : std_logic_vector_array(TWO_TIMES_T-1 downto 0);    
             
     --output GEN_rs_DIVIDEND_MUX signals
-    signal r_dividend : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal r_dividend : std_logic_vector_array(TWO_TIMES_T-1 downto 0);
 
     --output ADDER signals
-    signal w_adder : std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0);       
+    signal w_adder : std_logic_vector_array(TWO_TIMES_T-2 downto 0);       
     
 begin
     assert (TWO_TIMES_T <= 2**WORD_LENGTH-2) 

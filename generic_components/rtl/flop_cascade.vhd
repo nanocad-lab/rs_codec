@@ -21,7 +21,7 @@ end flop_cascade;
 
 architecture behavioral of flop_cascade is
 
-signal q_array : std_logic_vector_array(CASCADE_LENGTH-1 downto 0)(WORD_LENGTH downto 0);
+signal q_array : std_logic_vector_array(CASCADE_LENGTH-1 downto 0);
 	
 begin
     GEN_CONVOLUTIONAL_PATH: for I in 0 to (CASCADE_LENGTH - 1) generate

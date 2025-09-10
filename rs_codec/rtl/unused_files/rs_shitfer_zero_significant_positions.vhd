@@ -14,9 +14,9 @@ entity rs_shitfer_zero_significant_positions is
         TWO_TIMES_T : natural range 1 to 1022
     );
     port (
-        i_shifter : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+        i_shifter : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
         o_num_shift_zeros : out integer range 0 to 2**get_szs(TWO_TIMES_T)-1;
-        o_shifter : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0)
+        o_shifter : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)
     );
 end rs_shitfer_zero_significant_positions;
 

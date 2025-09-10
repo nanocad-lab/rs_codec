@@ -33,7 +33,7 @@ entity rs_encoder_wrapper is
             o_start_codeword : out std_logic;
             o_valid : out std_logic;
 			o_symbol : out std_logic_vector(get_word_length_from_rs_gf(N, RS_GF)-1 downto 0);            
-            o_syndrome : out std_logic_vector_array(N-K-1 downto 0)(get_word_length_from_rs_gf(N, RS_GF)-1 downto 0)
+            o_syndrome : out std_logic_vector_array(N-K-1 downto 0)
         );
 end entity;
 
@@ -45,6 +45,8 @@ constant TWO_TIMES_T : natural := N - K;
 signal w_symbol : std_logic_vector(WORD_LENGTH-1 downto 0); 
 signal w_start_codeword : std_logic;
 signal w_valid : std_logic;
+signal w_select_feedback : std_logic;
+signal w_stall : std_logic;
 
 begin
 
@@ -71,16 +73,19 @@ begin
 				  o_valid => w_valid,
 				  o_symbol => w_symbol);
 
+    w_select_feedback <= not (w_start_codeword and w_valid and i_consume);
+    w_stall <= not w_valid or not i_consume;
+
     RS_SYNDROME_UNIT_INST: rs_syndrome_unit
                            generic map(WORD_LENGTH => WORD_LENGTH, 
                                        TWO_TIMES_T => TWO_TIMES_T,
                                        TEST_MODE => TEST_MODE)
                            port map(clk => clk,
                                     rst => rst,
-                                    i_select_feedback => not (w_start_codeword and w_valid and i_consume),
-                                    i_stall => not w_valid or not i_consume,
+                                    i_select_feedback => w_select_feedback,
+                                    i_stall => w_stall,
                                     i_symbol => w_symbol,
-                                    o_syndrome => o_syndrome);   	
+                                    o_syndrome => o_syndrome);
 	o_symbol <=	w_symbol;
 	o_start_codeword <= w_start_codeword;
 	o_valid <= w_valid;

@@ -18,8 +18,8 @@ entity async_dff_array is
     port (
         clk : in std_logic;
         rst : in std_logic;
-        d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
-        q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0)
+        d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
+        q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)
     );
 end async_dff_array;
 

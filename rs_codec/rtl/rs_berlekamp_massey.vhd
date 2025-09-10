@@ -145,14 +145,14 @@ entity register_shifter is
              WORD_LENGTH : natural);
     port (clk : in std_logic;
           rst : in std_logic;
-		  reset_value : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
+		  reset_value : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
           i_first_input : in std_logic_vector(WORD_LENGTH-1 downto 0);
-          o_array: out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0));
+          o_array: out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0));
 end entity;
 
 architecture behavioral of register_shifter is
-signal r_array: std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
-signal w_array: std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
+signal r_array: std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
+signal w_array: std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
 begin
     OUTPUT_ASSIGNMENT: if (NUM_OF_ELEMENTS = 1) generate 
         w_array(0) <= i_first_input;
@@ -185,14 +185,14 @@ entity register_feedback_shifter is
             WORD_LENGTH : natural);
     port (clk : in std_logic;
 		   rst : in std_logic;
-		   reset_value : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
+		   reset_value : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
 		   i_load_input_array: in std_logic;
-		   i_array: in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
-		   o_array: out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0));
+		   i_array: in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
+		   o_array: out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0));
 end entity;
 
 architecture behavioral of register_feedback_shifter is
-signal r_array: std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
+signal r_array: std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
 begin
     process (clk) 
     begin 
@@ -242,22 +242,38 @@ entity rs_berlekamp_massey_unit is
         i_clear_syn : in std_logic;
         i_location_poly_phase : in std_logic;
         i_value_poly_phase : in std_logic;
-        i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+        i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
         i_syndrome_indexer : in integer range 0 to TWO_TIMES_T-1;
-		o_locator_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)(WORD_LENGTH-1 downto 0);
-        o_value_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)(WORD_LENGTH-1 downto 0)
+		o_locator_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0);
+        o_value_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)
     );
 end rs_berlekamp_massey_unit;
 
 architecture behavioral of rs_berlekamp_massey_unit is
 	constant T : natural := get_t(TWO_TIMES_T);
-    constant c_reset_syndrome_shifter: std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0) := 
-        (std_logic_vector(to_unsigned(0, WORD_LENGTH)), others => std_logic_vector(to_unsigned(0, WORD_LENGTH)));
-    constant c_reset_connection_shifter: std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0) := 
-        (std_logic_vector(to_unsigned(1, WORD_LENGTH)), others => std_logic_vector(to_unsigned(0, WORD_LENGTH)));
+    constant c_reset_syndrome_shifter: std_logic_vector_array(T-1 downto 0) := 
+        (others => (others => '0'));
+    -- Initialize connection shifter with first element = 1, others = 0
+    function init_connection_shifter(T: natural; WORD_LENGTH: natural) return std_logic_vector_array is
+        variable temp : std_logic_vector_array(T-1 downto 0);
+    begin
+        for i in 0 to T-1 loop
+            if i = 0 then
+                temp(i)(WORD_LENGTH-1 downto 0) := std_logic_vector(to_unsigned(1, WORD_LENGTH));
+                temp(i)(9 downto WORD_LENGTH) := (others => '0');
+            else
+                temp(i)(WORD_LENGTH-1 downto 0) := std_logic_vector(to_unsigned(0, WORD_LENGTH));
+                temp(i)(9 downto WORD_LENGTH) := (others => '0');
+            end if;
+        end loop;
+        return temp;
+    end function;
+    
+    constant c_reset_connection_shifter: std_logic_vector_array(T-1 downto 0) := 
+        init_connection_shifter(T, WORD_LENGTH);
 
     --SYNDROME_REGISTER_ARRAY signals
-    signal r_syndrome : std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal r_syndrome : std_logic_vector_array(TWO_TIMES_T-1 downto 0);
 
     signal w_indexed_syndrome: std_logic_vector(WORD_LENGTH-1 downto 0);
 
@@ -265,13 +281,13 @@ architecture behavioral of rs_berlekamp_massey_unit is
     signal r_first_syndrome: std_logic_vector(WORD_LENGTH-1 downto 0);
 
     --SYNDROME_SHIFTER signals
-    signal r_syndrome_shifter: std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal r_syndrome_shifter: std_logic_vector_array(T-1 downto 0);
     
     --SYNDROME_TIMES_LOCATION_MULT signals
-    signal w_syndrome_times_location: std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_syndrome_times_location: std_logic_vector_array(T-1 downto 0);
 
     --REDUCE_ADDER signals
-	 signal w_reduce_adder: std_logic_vector_array(T downto 0)(WORD_LENGTH-1 downto 0);
+	 signal w_reduce_adder: std_logic_vector_array(T downto 0);
     signal w_discrepancy: std_logic_vector(WORD_LENGTH-1 downto 0);
 
     --UPDATE_DISCREPANCY signals
@@ -288,21 +304,27 @@ architecture behavioral of rs_berlekamp_massey_unit is
     signal w_mult_discrepancy: std_logic_vector(WORD_LENGTH-1 downto 0);
 
     --LOCATION_MULT signals
-    signal w_location_mult: std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_location_mult: std_logic_vector_array(T-1 downto 0);
 
     --LOCATION_ADDER signals
-    signal w_location_adder: std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_location_adder: std_logic_vector_array(T-1 downto 0);
 
     --LOCATION_POLY_REGISTER signals
-    signal r_location_poly: std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal r_location_poly: std_logic_vector_array(T-1 downto 0);
 
     --CONNECTION_SHIFTER signals
-	 signal w_connection_shifter: std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
-    signal r_connection_shifter: std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+	 signal w_connection_shifter: std_logic_vector_array(T-1 downto 0);
+    signal r_connection_shifter: std_logic_vector_array(T-1 downto 0);
 
     --R_VALUE_REGISTER signals
-    signal r_value_poly: std_logic_vector_array(T-1 downto 0)(WORD_LENGTH-1 downto 0);
+    signal r_value_poly: std_logic_vector_array(T-1 downto 0);
+    
+    -- Intermediate signals for Boolean expressions (synthesis compatibility)
+    signal w_reset_combined: std_logic;
 begin
+    -- Assign intermediate signals for Boolean expressions
+    w_reset_combined <= i_control_rst or i_clear_syn;
+    
     SYNDROME_REGISTER_ARRAY: config_dff_array
                              generic map (NUM_OF_ELEMENTS => TWO_TIMES_T,
                                           WORD_LENGTH => WORD_LENGTH)
@@ -312,12 +334,12 @@ begin
                                        q => r_syndrome);
 
     --Only a selector for r_syndrome array that depends on an indexer driven by an input port.
-    w_indexed_syndrome <= r_syndrome(i_syndrome_indexer);
+    w_indexed_syndrome <= r_syndrome(i_syndrome_indexer)(WORD_LENGTH-1 downto 0);
 
     FIRST_SYNDROME_REG: sync_dff
                         generic map (WORD_LENGTH => WORD_LENGTH)
                         port map (clk => clk,
-                                  rst => i_control_rst or i_clear_syn,
+                                  rst => w_reset_combined,
                                   d => w_indexed_syndrome,
                                   q => r_first_syndrome);
 
@@ -325,7 +347,7 @@ begin
                       generic map (NUM_OF_ELEMENTS => T,
                                    WORD_LENGTH => WORD_LENGTH)
                       port map (clk => clk,
-                                rst => i_control_rst or i_clear_syn,
+                                rst => w_reset_combined,
 								reset_value => c_reset_syndrome_shifter,
                                 i_first_input => r_first_syndrome,
                                 o_array => r_syndrome_shifter);
@@ -334,18 +356,19 @@ begin
         SYNDROME_TIMES_LOCATION_MULT: rs_full_multiplier
                                       generic map (WORD_LENGTH => WORD_LENGTH,
                                                    TEST_MODE => TEST_MODE)
-                                      port map (i1 => r_syndrome_shifter(I),
-                                                i2 => r_location_poly(I),
-                                                o => w_syndrome_times_location(I));  
+                                      port map (i1 => r_syndrome_shifter(I)(WORD_LENGTH-1 downto 0),
+                                                i2 => r_location_poly(I)(WORD_LENGTH-1 downto 0),
+                                                o => w_syndrome_times_location(I)(WORD_LENGTH-1 downto 0));  
     end generate GEN_SYNDROME_TIMES_LOCATION;
 
 	w_reduce_adder(T downto 1) <= w_syndrome_times_location;
-    w_reduce_adder(0) <= r_first_syndrome;
+    w_reduce_adder(0)(WORD_LENGTH-1 downto 0) <= r_first_syndrome;
+    w_reduce_adder(0)(9 downto WORD_LENGTH) <= (others => '0');
     
     REDUCE_ADDER: rs_reduce_adder
                   generic map(NUM_OF_ELEMENTS => T + 1,
                               WORD_LENGTH => WORD_LENGTH)
-				  port map(i => w_reduce_adder,
+                  port map(i => w_reduce_adder,
                            o => w_discrepancy);
 
     process (i_syndrome_indexer, w_discrepancy, r_2l)
@@ -406,19 +429,19 @@ begin
                            generic map (WORD_LENGTH => WORD_LENGTH,
                                         TEST_MODE => TEST_MODE)
                            port map (i1 => w_mult_discrepancy,
-                                     i2 => r_connection_shifter(I),
-                                     o => w_location_mult(I));
+                                     i2 => r_connection_shifter(I)(WORD_LENGTH-1 downto 0),
+                                     o => w_location_mult(I)(WORD_LENGTH-1 downto 0));
 
             LOCATTION_ADDER: rs_adder
                              generic map (WORD_LENGTH => WORD_LENGTH,
                                           TEST_MODE => TEST_MODE)
-                             port map (i1 => w_location_mult(I),
-                                       i2 => r_location_poly(I),
-                                       o => w_location_adder(I));   
+                             port map (i1 => w_location_mult(I)(WORD_LENGTH-1 downto 0),
+                                       i2 => r_location_poly(I)(WORD_LENGTH-1 downto 0),
+                                       o => w_location_adder(I)(WORD_LENGTH-1 downto 0));   
         end generate GEN_LOCATION_POLY_LOGIC;
 
 		w_connection_shifter(T-1 downto 1) <= r_location_poly(T-2 downto 0);
-		w_connection_shifter(0) <= std_logic_vector(to_unsigned(1, WORD_LENGTH));
+		w_connection_shifter(0)(WORD_LENGTH-1 downto 0) <= std_logic_vector(to_unsigned(1, WORD_LENGTH));
         CONNECTION_SHIFTER: register_feedback_shifter
                             generic map (NUM_OF_ELEMENTS => T,
                                          WORD_LENGTH => WORD_LENGTH)
@@ -433,9 +456,9 @@ begin
             LOCATTION_ADDER: rs_adder
                              generic map (WORD_LENGTH => WORD_LENGTH,
                                           TEST_MODE => TEST_MODE)
-                             port map (i1 => r_location_poly(0),
+                             port map (i1 => r_location_poly(0)(WORD_LENGTH-1 downto 0),
                                        i2 => w_mult_discrepancy,
-                                       o => w_location_adder(0));   
+                                       o => w_location_adder(0)(WORD_LENGTH-1 downto 0));   
         
     end generate;
 
@@ -455,7 +478,7 @@ begin
                     r_value_poly(I) <= (others => '0');
                 end loop;
             elsif (i_value_poly_phase = '1' and i_syndrome_indexer >= 1) then
-                r_value_poly(i_syndrome_indexer - 1) <= w_discrepancy;
+                r_value_poly(i_syndrome_indexer - 1)(WORD_LENGTH-1 downto 0) <= w_discrepancy;
             end if;
         end if;   
     end process;
@@ -481,11 +504,11 @@ entity rs_berlekamp_massey is
             rst : in std_logic;
             i_fifo_chien_forney_full : in std_logic;
             i_syndrome_ready : in std_logic;
-            i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+            i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
             o_rd_syndrome : out std_logic;
             o_berlekamp_massey_ready : out std_logic;
-			o_locator_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)(WORD_LENGTH-1 downto 0);
-            o_value_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)(WORD_LENGTH-1 downto 0)
+			o_locator_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0);
+            o_value_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)
         );
 end rs_berlekamp_massey;
 
@@ -522,10 +545,10 @@ architecture behavioral of rs_berlekamp_massey is
             i_clear_syn : in std_logic;
             i_location_poly_phase : in std_logic;
             i_value_poly_phase : in std_logic;
-            i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0);
+            i_syndrome : in std_logic_vector_array(TWO_TIMES_T-1 downto 0);
             i_syndrome_indexer : in integer range 0 to TWO_TIMES_T-1;
-            o_locator_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)(WORD_LENGTH-1 downto 0);
-            o_value_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)(WORD_LENGTH-1 downto 0)
+            o_locator_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0);
+            o_value_poly : out std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)
         );
     end component;
 	

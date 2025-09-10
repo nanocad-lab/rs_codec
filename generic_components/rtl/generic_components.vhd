@@ -44,8 +44,8 @@ package GENERIC_COMPONENTS is
         port (
             clk : in std_logic;
             rst : in std_logic;
-            d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
-            q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0)
+            d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
+            q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)
         );
     end component;
 
@@ -57,8 +57,8 @@ package GENERIC_COMPONENTS is
         port (
             clk : in std_logic;
             en : in std_logic;
-            d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
-            q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0)
+            d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
+            q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)
         );
     end component;
 
@@ -70,7 +70,7 @@ package GENERIC_COMPONENTS is
 		 port (
 			  i : in std_logic_vector(WORD_LENGTH-1 downto 0);
 			  i_sel : in std_logic_vector(get_log_round(NUM_OF_ELEMENTS)-1 downto 0);   
-			  o_array : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0)
+			  o_array : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)
 		 );
     end component;
 
@@ -108,7 +108,7 @@ package GENERIC_COMPONENTS is
 			  NUM_OF_ELEMENTS : integer
 		 );
 		 port (
-			  i_array : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
+			  i_array : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
 			  i_sel : in std_logic_vector(get_log_round(NUM_OF_ELEMENTS)-1 downto 0);   
 			  o : out std_logic_vector(WORD_LENGTH-1 downto 0)   
 		 );
@@ -188,9 +188,9 @@ end component;
 					 WORD_LENGTH : natural);
 		 port (clk : in std_logic;
 				 rst : in std_logic;
-			    reset_value : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
+			    reset_value : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
 				 i_first_input : in std_logic_vector(WORD_LENGTH-1 downto 0);
-				 o_array: out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0));
+				 o_array: out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0));
     end component;
 
     component register_feedback_shifter is
@@ -198,10 +198,10 @@ end component;
 					 WORD_LENGTH : natural);
 		 port (clk : in std_logic;
 				 rst : in std_logic;
-				 reset_value : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
+				 reset_value : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
 				 i_load_input_array: in std_logic;
-				 i_array: in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
-				 o_array: out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0));
+				 i_array: in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
+				 o_array: out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0));
     end component;
 
     component reg_fifo is
@@ -238,12 +238,12 @@ end component;
 
             -- FIFO Write Interface
             i_wr_en   : in  std_logic;
-            i_wr_data : in std_logic_vector_array(ARRAY_WIDTH-1 downto 0)(WORD_LENGTH-1 downto 0);
+            i_wr_data : in std_logic_vector_array(ARRAY_WIDTH-1 downto 0);
             o_full    : out std_logic;
         
             -- FIFO Read Interface
             i_rd_en   : in  std_logic;
-            o_rd_data : out std_logic_vector_array(ARRAY_WIDTH-1 downto 0)(WORD_LENGTH-1 downto 0);
+            o_rd_data : out std_logic_vector_array(ARRAY_WIDTH-1 downto 0);
             o_empty   : out std_logic
         );
     end component;
@@ -281,8 +281,8 @@ end component;
         port (
             clk : in std_logic;
             rst : in std_logic;
-            d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
-            q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0)
+            d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
+            q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)
         );
     end component;
 
@@ -294,8 +294,8 @@ end component;
         port (
             clk : in std_logic;
             rst : in std_logic;
-            d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0);
-            q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)(WORD_LENGTH-1 downto 0)
+            d : in std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0);
+            q : out std_logic_vector_array(NUM_OF_ELEMENTS-1 downto 0)
         );
     end component;
 

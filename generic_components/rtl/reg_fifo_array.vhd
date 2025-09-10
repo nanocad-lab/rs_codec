@@ -39,19 +39,19 @@ entity reg_fifo_array is
 
     -- FIFO Write Interface
     i_wr_en   : in  std_logic;
-    i_wr_data : in std_logic_vector_array(ARRAY_WIDTH-1 downto 0)(WORD_LENGTH-1 downto 0);
+    i_wr_data : in std_logic_vector_array(ARRAY_WIDTH-1 downto 0);
     o_full    : out std_logic;
  
     -- FIFO Read Interface
     i_rd_en   : in  std_logic;
-    o_rd_data : out std_logic_vector_array(ARRAY_WIDTH-1 downto 0)(WORD_LENGTH-1 downto 0);
+    o_rd_data : out std_logic_vector_array(ARRAY_WIDTH-1 downto 0);
     o_empty   : out std_logic
     );
 end reg_fifo_array;
  
 architecture behavioral of reg_fifo_array is
  
-  type t_FIFO_DATA is array (0 to NUM_OF_ELEMENTS-1) of std_logic_vector_array(ARRAY_WIDTH-1 downto 0)(WORD_LENGTH-1 downto 0);
+  type t_FIFO_DATA is array (0 to NUM_OF_ELEMENTS-1) of std_logic_vector_array(ARRAY_WIDTH-1 downto 0);
   signal r_FIFO_DATA : t_FIFO_DATA;
  
   signal r_WR_INDEX   : integer range 0 to NUM_OF_ELEMENTS-1;

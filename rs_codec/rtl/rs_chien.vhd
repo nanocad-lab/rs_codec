@@ -21,7 +21,7 @@ entity rs_chien is
             clk : in std_logic;
             i_select_input : in std_logic;
             i_stall : in std_logic;
-            i_terms : in std_logic_vector_array(T downto 0)(WORD_LENGTH-1 downto 0);         
+            i_terms : in std_logic_vector_array(T downto 0);         
             o_has_error : out std_logic;
             o_derivative : out std_logic_vector(WORD_LENGTH-1 downto 0)
         );
@@ -29,54 +29,62 @@ end rs_chien;
 
 architecture behavioral of rs_chien is
     constant word_zero : std_logic_vector(WORD_LENGTH-1 downto 0) := (others => '0');
-    signal w_selector : std_logic_vector_array(T downto 0)(WORD_LENGTH-1 downto 0);
-    signal w_multiplier : std_logic_vector_array(T downto 0)(WORD_LENGTH-1 downto 0);
-    signal w_flop : std_logic_vector_array(T downto 0)(WORD_LENGTH-1 downto 0);
-    signal r_flop : std_logic_vector_array(T downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_selector : std_logic_vector_array(T downto 0);
+    signal w_multiplier : std_logic_vector_array(T downto 0);
+    signal w_flop : std_logic_vector_array(T downto 0);
+    signal r_flop : std_logic_vector_array(T downto 0);
 
     signal w_odd_sum : std_logic_vector(WORD_LENGTH-1 downto 0);
     signal w_even_sum : std_logic_vector(WORD_LENGTH-1 downto 0);
     signal w_sum :  std_logic_vector(WORD_LENGTH-1 downto 0) := (others => '0');
+    
+    -- Intermediate signals for function calls (synthesis compatibility)
+    signal w_even_indexes : std_logic_vector_array((T+2)/2-1 downto 0);
+    signal w_odd_indexes : std_logic_vector_array((T+1)/2-1 downto 0);
 begin
 	 assert (T <= 2**WORD_LENGTH-2) 
 		  report "ASSERT FAILURE - T <= 2**WORD_LENGTH-2" 
 		  severity failure;
+		  
+	 -- Assign intermediate signals for function calls
+	 w_even_indexes <= get_even_indexes(r_flop, WORD_LENGTH);
+	 w_odd_indexes <= get_odd_indexes(r_flop, WORD_LENGTH);
     GEN_RS_CHIEN_UNIT: for I in 0 to T generate
     begin
-        w_selector(I) <= i_terms(I) when (i_select_input = '1') else r_flop(I);
+        w_selector(I)(WORD_LENGTH-1 downto 0) <= i_terms(I)(WORD_LENGTH-1 downto 0) when (i_select_input = '1') else r_flop(I)(WORD_LENGTH-1 downto 0);
         MULTIPLIER: rs_multiplier
                     generic map (WORD_LENGTH => WORD_LENGTH,
                                  MULT_CONSTANT => get_pow(WORD_LENGTH, I),
                                  TEST_MODE => TEST_MODE)
-                    port map (i => w_selector(I), 
-                              o => w_multiplier(I));
-        w_flop(I) <= r_flop(I) when (i_stall = '1') else w_multiplier(I);
+                    port map (i => w_selector(I)(WORD_LENGTH-1 downto 0), 
+                              o => w_multiplier(I)(WORD_LENGTH-1 downto 0));
+        w_flop(I)(WORD_LENGTH-1 downto 0) <= r_flop(I)(WORD_LENGTH-1 downto 0) when (i_stall = '1') else w_multiplier(I)(WORD_LENGTH-1 downto 0);
         D_FLOP: no_rst_dff 
                 generic map (WORD_LENGTH => WORD_LENGTH) 
                 port map (clk => clk,
-                          d => w_flop(I),
-                          q => r_flop(I));
+                          d => w_flop(I)(WORD_LENGTH-1 downto 0),
+                          q => r_flop(I)(WORD_LENGTH-1 downto 0));
     end generate;
 
     GEN_EVEN_INDEX_SUM_T_EQUAL_TO_1: if T = 1 generate
-        w_even_sum <= r_flop(0);
+        w_even_sum <= r_flop(0)(WORD_LENGTH-1 downto 0);
     end generate;
     GEN_EVEN_INDEX_SUM_T_NOT_EQUAL_TO_1: if T /= 1 generate
         REDUCE_ADDER_EVEN: rs_reduce_adder
         generic map(NUM_OF_ELEMENTS => (T+2)/2,
                     WORD_LENGTH => WORD_LENGTH)
-        port map(i => get_even_indexes(r_flop, WORD_LENGTH),
+        port map(i => w_even_indexes,
                  o => w_even_sum);
     end generate;
 
     GEN_ODD_INDEX_SUM_T_EQUAL_TO_1: if T = 1 generate
-        w_odd_sum <= r_flop(1);
+        w_odd_sum <= r_flop(1)(WORD_LENGTH-1 downto 0);
     end generate;
     GEN_ODD_INDEX_SUM_T_NOT_EQUAL_TO_1: if T /= 1 generate
         REDUCE_ADDER_ODD: rs_reduce_adder
         generic map(NUM_OF_ELEMENTS => (T+1)/2,
                     WORD_LENGTH => WORD_LENGTH)
-        port map(i => get_odd_indexes(r_flop, WORD_LENGTH),
+        port map(i => w_odd_indexes,
                  o => w_odd_sum);
     end generate;
         

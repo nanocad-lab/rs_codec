@@ -28,7 +28,7 @@ entity rs_syndrome is
         o_wr_number_of_symbols : out std_logic;
         o_wr_symbol : out std_logic;
         o_number_of_symbols : out std_logic_vector(WORD_LENGTH-1 downto 0);
-        o_syndrome : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0)
+        o_syndrome : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)
     );
 end rs_syndrome;
 
@@ -75,7 +75,7 @@ architecture behavioral of rs_syndrome is
             i_select_feedback : in std_logic;
             i_stall : in std_logic;
             i_symbol : in std_logic_vector(WORD_LENGTH-1 downto 0);
-            o_syndrome : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0)
+            o_syndrome : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)
         );
     end component;
 begin
@@ -348,7 +348,7 @@ entity rs_syndrome_unit is
         i_select_feedback : in std_logic;
         i_stall : in std_logic;
     	i_symbol : in std_logic_vector(WORD_LENGTH-1 downto 0);
-        o_syndrome : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)(WORD_LENGTH-1 downto 0)
+        o_syndrome : out std_logic_vector_array(TWO_TIMES_T-1 downto 0)
     );
 end rs_syndrome_unit;
 
@@ -364,6 +364,6 @@ begin
                                            i_select_feedback => i_select_feedback,
                                            i_stall => i_stall,
                                            i_symbol => i_symbol,
-                                           o_syndrome => o_syndrome(I));
+                                           o_syndrome => o_syndrome(I)(WORD_LENGTH-1 downto 0));
     end generate GEN_RS_SYNDROME_UNIT;
 end behavioral;

@@ -22,8 +22,8 @@ entity rs_chien_forney is
         i_consume : in std_logic;
         i_fifos_ready : in std_logic;
         i_number_of_symbols : in std_logic_vector(WORD_LENGTH-1 downto 0);
-	    i_chien : in std_logic_vector_array(get_t(TWO_TIMES_T) downto 0)(WORD_LENGTH-1 downto 0);
-        i_forney : in std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0)(WORD_LENGTH-1 downto 0);
+	    i_chien : in std_logic_vector_array(get_t(TWO_TIMES_T) downto 0);
+        i_forney : in std_logic_vector_array(get_t(TWO_TIMES_T)-1 downto 0);
         o_end_codeword : out std_logic;
         o_error : out std_logic;
 	    o_rd_chien_forney : out std_logic;

@@ -23,29 +23,29 @@ entity rs_euclidean_acc_unit is
         i_swap : in std_logic;
         i_num_shift : integer range 0 to TWO_TIMES_T;
         i_quocient : in std_logic_vector(WORD_LENGTH-1 downto 0);
-        o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0)
+        o_chien : out std_logic_vector_array(TWO_TIMES_T-2 downto 0)
     );
 end rs_euclidean_acc_unit;
 
 architecture behavioral of rs_euclidean_acc_unit is
     --output GEN_rs_QUOCIENT_MULT signals
-    signal w_mult : std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0);
-    signal r_mult : std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_mult : std_logic_vector_array(TWO_TIMES_T-3 downto 0);
+    signal r_mult : std_logic_vector_array(TWO_TIMES_T-3 downto 0);
 
     --output GEN_rs_QUOCIENT_MULT signals (original code)
-    signal w_selector_mult : std_logic_vector_array(TWO_TIMES_T-3 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_selector_mult : std_logic_vector_array(TWO_TIMES_T-3 downto 0);
 
     --output GEN_rs_ACC_MUX signals
-    signal w_selector_acc : std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_selector_acc : std_logic_vector_array(TWO_TIMES_T-2 downto 0);
 
     --output D_FLOP_ACC signals
-    signal r_acc : std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0);
+    signal r_acc : std_logic_vector_array(TWO_TIMES_T-2 downto 0);
     
     --output ADDER signals
-    signal w_adder : std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_adder : std_logic_vector_array(TWO_TIMES_T-2 downto 0);
     
     --output SHIFTER signals
-    signal w_shifter : std_logic_vector_array(TWO_TIMES_T-2 downto 0)(WORD_LENGTH-1 downto 0);
+    signal w_shifter : std_logic_vector_array(TWO_TIMES_T-2 downto 0);
     
     
 begin
