@@ -1,0 +1,16 @@
+label,top,N,K,GF_WIDTH,CLK_NS,area,wns,total_dyn_mw
+N544_K514_GF10_TT2T030_CLK1.400ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,1.400000,182396.993999,-0.548093,57.492409
+N544_K514_GF10_TT2T030_CLK2.200ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,2.200000,181601.919942,4.9e-05,37.284969
+N544_K514_GF10_TT2T030_CLK3.000ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,3.000000,182852.651942,0.073881,28.243576
+N544_K514_GF10_TT2T030_CLK6.000ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,6.000000,163525.358227,4.131938,12.264069
+N544_K514_GF10_TT2T030_CLK1.600ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,1.600000,181719.757979,-0.424017,50.802353
+N544_K514_GF10_TT2T030_CLK2.400ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,2.400000,181106.095973,0.000838,33.948509
+N544_K514_GF10_TT2T030_CLK3.500ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,3.500000,182838.819942,0.211932,24.219139
+N544_K514_GF10_TT2T030_CLK8.000ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,8.000000,163525.358227,6.131938,9.19805
+N544_K514_GF10_TT2T030_CLK1.800ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,1.800000,181620.007977,-0.19136,45.045467
+N544_K514_GF10_TT2T030_CLK2.600ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,2.600000,182973.947936,0.000853,32.595741
+N544_K514_GF10_TT2T030_CLK4.000ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,4.000000,163525.358227,2.131938,18.395933
+N544_K514_GF10_TT2T030_CLK10.000ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,10.000000,163525.358227,8.131938,7.358441
+N544_K514_GF10_TT2T030_CLK2.000ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,2.000000,181796.897957,-0.021874,41.044449
+N544_K514_GF10_TT2T030_CLK2.800ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,2.800000,183088.061931,0.004149,30.356308
+N544_K514_GF10_TT2T030_CLK5.000ns_db_rs_decoder_plus_syndrome,rs_decoder_plus_syndrome,544,514,10,5.000000,182418.273937,1.519649,16.703806

@@ -3,4 +3,11 @@ alib-52/*
 data/*
 olddata/*
 newdata/*
+!newdata/*/
+newdata/*/**
+!newdata/*/summary.csv
+__pycache__/
+*.pyc
+command.log
+default.svf
 error*.txt
