@@ -94,6 +94,27 @@ Legacy helpers such as `0.tcl`, `1.tcl`, and `syn.tcl` capture earlier Design Co
 - The `generic_components/formal/check_synthesis_*.tcl` scripts perform unit-level elaboration checks for reusable blocks (shift registers, FIFOs, buffers, etc.).
 - FPGA-oriented ModelSim automation for supporting components lives under `generic_components/sim/`.
 
+### Streaming Throughput and Latency
+
+Let `N` be the codeword length, `K` the message symbols, `m` the Galois-field width (bits/symbol), `t = (N-K)/2`, and `f_clk = 1/CLK_NS`. The RTL keeps the encoder and syndrome paths fully streaming (one symbol each cycle) while the half-parallel decoder reuses finite-field resources and therefore emits one symbol every two clocks, matching the energy/throughput model derived from Silva et al. (2021).【F:rs_codec/rtl/rs_encoder.vhd†L198-L339】【F:rs_codec/rtl/rs_encoder.vhd†L400-L448】【F:rs_codec/rtl/rs_syndrome.vhd†L262-L305】【F:scripts/add_pj_per_bit_to_summary.py†L3-L40】【F:rs_codec/rtl/rs_chien_forney.vhd†L200-L318】 The resulting steady-state metrics are:
+
+| Block | Cycles per symbol | Symbol throughput | Information-bit throughput | Latency highlights |
+| ----- | ----------------- | ----------------- | ------------------------- | ----------------- |
+| Encoder | 1 | `f_clk` | `(K/N) · m · f_clk` | Message symbols propagate combinationally; parity generation keeps `o_valid` high for `N-K` additional cycles before asserting `o_end_codeword`.【F:rs_codec/rtl/rs_encoder.vhd†L198-L339】【F:rs_codec/rtl/rs_encoder.vhd†L400-L448】 |
+| Syndrome | 1 | `f_clk` | `(K/N) · m · f_clk` (when forwarding toward the decoder) | The controller asserts `o_wr_symbol` every accepted input cycle and only raises `o_valid` after the final codeword symbol, i.e., after `N` accumulation cycles plus one register stage.【F:rs_codec/rtl/rs_syndrome.vhd†L262-L305】 |
+| Decoder (half) | 2 | `f_clk / 2` | `(K/N) · m · f_clk / 2` | Formal timing constraints show the first corrected symbol appears after `N + 2(N-K) + 7` clocks and the full codeword drains by cycle `2N + 2(N-K) + 6`.【F:rs_codec/formal/rs_decoder/procs.itcl†L174-L200】 |
+
+For reference, the decoder timing bounds above are the ones used to size JasperGold proofs and capture the Berlekamp–Massey plus Chien/Forney pipeline depth.【F:rs_codec/formal/rs_decoder/procs.itcl†L174-L200】 Because the decoder exports a ready/valid interface, keeping `i_consume = 1` sustains the quoted per-symbol cadence.【F:rs_codec/rtl/rs_chien_forney.vhd†L200-L318】
+
+#### Example: RS(544,512) over GF(2⁸)
+
+The ASAP7 sweeps include `CLK_NS = 1.55` ns for `N = 544`, `K = 512`, `m = 8`, which maps to `f_clk ≈ 645 MHz`.【F:newdata/asap7_opt_sweep/summary.csv†L12-L23】 Plugging these numbers into the expressions above gives:
+
+- Encoder (and syndrome) symbol throughput ≈ 0.645 Gsym/s, information throughput ≈ 4.86 Gb/s, with a parity flush latency of `(N-K)·CLK_NS = 32·1.55 ns ≈ 49.6 ns`.
+- Decoder symbol throughput ≈ 0.323 Gsym/s, information throughput ≈ 2.43 Gb/s, first corrected symbol after `(544 + 2·32 + 7)·1.55 ns ≈ 0.95 µs`, and the entire codeword drained by `(2·544 + 2·32 + 6)·1.55 ns ≈ 1.79 µs`.
+
+These concrete values match the cycle budgeting used in the Silva et al. study and the repository’s energy post-processing scripts.【4c2353†L1-L23】【F:scripts/add_pj_per_bit_to_summary.py†L3-L40】
+
 ### Example Plot Workflow
 
 1. Generate or reuse a selection CSV (`python scripts/rsfec_select_and_cfg.py`).
