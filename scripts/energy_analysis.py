@@ -24,7 +24,7 @@ class SweepResult:
     knee_idx: int
 
 
-BLOCK_INFO = {
+BLOCK_INFO: dict[str, tuple[str, float]] = {
     "rs_encoder_wrapper": ("Encoder", 1.0),
     "rs_syndrome": ("Syndrome", 1.0),
     "rs_decoder_plus_syndrome": ("Decoder", 1.0),
@@ -61,7 +61,7 @@ def _design_name(top: str, n: float, k: float) -> str:
 
 
 def _populate_power_columns(df: pd.DataFrame) -> pd.DataFrame:
-    cache: Dict[Tuple[str, str], Tuple[float, float, float]] = {}
+    cache: Dict[Tuple[str, str, Path], Tuple[float, float, float]] = {}
     leakages = []
     totals = []
     dynamics = []
@@ -69,7 +69,7 @@ def _populate_power_columns(df: pd.DataFrame) -> pd.DataFrame:
     for _, row in df.iterrows():
         label = row["label"]
         top = row["top"]
-        base = Path(row['__root'])
+        base = Path(str(row["__root"]))
         key = (label, top, base)
         if key not in cache:
             design = _design_name(top, row["N"], row["K"])
@@ -149,7 +149,7 @@ def _make_result(name: str, slug: str, data: pd.DataFrame) -> SweepResult:
 def load_sweep(summary_paths: list[Path], name: str) -> list[SweepResult]:
     """Load summary CSV and compute derived metrics for encoder, syndrome, decoder, and total."""
 
-    frames = []
+    frames: list[pd.DataFrame] = []
     for path in summary_paths:
         if path.exists():
             frame = pd.read_csv(path)
@@ -160,7 +160,7 @@ def load_sweep(summary_paths: list[Path], name: str) -> list[SweepResult]:
     df = pd.concat(frames, ignore_index=True)
     df = df[df["top"].isin(BLOCK_INFO.keys())].copy()
     if df.empty:
-        raise ValueError(f"No recognised tops found in {summary_path}")
+        raise ValueError(f"No recognised tops found in {name}")
 
     # Normalise WNS to nanoseconds (reports mix ns and ps).
     df["wns_ns"] = df["wns"].apply(lambda x: x / 1000.0 if x > 50.0 else x)

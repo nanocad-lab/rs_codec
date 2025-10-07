@@ -18,21 +18,33 @@ The script appends a new column 'pj_per_bit' and overwrites the file.
 
 import csv
 from pathlib import Path
+from typing import Dict, List, MutableMapping, Optional
 import sys
 
 
-def compute_pj_per_bit(row: dict) -> float:
+def _to_float(value: Optional[str]) -> Optional[float]:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if stripped == "":
+        return None
     try:
-        n = float(row["N"]) if row.get("N") not in (None, "") else None
-        k = float(row["K"]) if row.get("K") not in (None, "") else None
-        m = float(row["GF_WIDTH"]) if row.get("GF_WIDTH") not in (None, "") else None
-        clk_ns = float(row["CLK_NS"]) if row.get("CLK_NS") not in (None, "") else None
-        p_mw = float(row["total_dyn_mw"]) if row.get("total_dyn_mw") not in (None, "") else None
-        top = row.get("top", "")
-    except Exception:
-        return float("nan")
+        return float(stripped)
+    except ValueError:
+        return None
 
-    if None in (n, k, m, clk_ns, p_mw) or m == 0 or k == 0 or n == 0:
+
+def compute_pj_per_bit(row: MutableMapping[str, Optional[str]]) -> float:
+    n = _to_float(row.get("N"))
+    k = _to_float(row.get("K"))
+    m = _to_float(row.get("GF_WIDTH"))
+    clk_ns = _to_float(row.get("CLK_NS"))
+    p_mw = _to_float(row.get("total_dyn_mw"))
+    top = (row.get("top") or "").strip()
+
+    if n is None or k is None or m is None or clk_ns is None or p_mw is None:
+        return float("nan")
+    if m == 0 or k == 0 or n == 0:
         return float("nan")
 
     rate = k / n
@@ -45,8 +57,8 @@ def main(path: Path) -> int:
     # Read CSV
     with path.open(newline="") as f:
         reader = csv.DictReader(f)
-        rows = list(reader)
-        fieldnames = list(reader.fieldnames or [])
+        rows: List[Dict[str, Optional[str]]] = [dict(row) for row in reader]
+        fieldnames: List[str] = list(reader.fieldnames or [])
 
     # Append new column if not present
     new_col = "pj_per_bit"

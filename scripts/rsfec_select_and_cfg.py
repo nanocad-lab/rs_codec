@@ -1,37 +1,45 @@
 #!/usr/bin/env python3
-"""
-RS-FEC selector and synthesis-config generator (m=8, k power-of-two).
+"""RS-FEC selector and synthesis-config generator (m=8, k power-of-two)."""
 
-- Inputs: pre-FEC BER grid from 1e-4 down to 1e-15 in half-decade steps.
-- Targets: post-FEC BER targets {1e-12, 1e-15, 1e-30}.
-- For each (input, target), compute the minimal n (i.e., minimal t with n=k+2t)
-  that meets the target using RS(n,k) over GF(2^8), scanning k in {16,32,64,128}.
-- Choose across k by highest code rate (tie → smaller n).
-- Outputs:
-  1) CSV table mapping (input, target) → chosen (n,k,t,rate,post_ber_est)
-  2) Synthesis config file in the requested format (unique (n,k) pairs):
-     N K GF_WIDTH clock_ps [library_dir] [top]
-
-Model assumptions:
-- Bit errors are independent. Symbol error probability p_s = 1 - (1 - p_b)^m.
-- RS(n,k) corrects up to t=(n-k)/2 symbol errors per block.
-- Post-FEC BER approximation:
-    BER_post ≈ 0.5 * Σ_{i=t+1..n} (i/n) * Binomial(n,i) * p_s^i * (1-p_s)^(n-i).
-- GF(2^8) → n ≤ 255.
-
-You can tweak parameters at the bottom (LIB path, clock_ps, k set, ranges).
-"""
+from __future__ import annotations
 
 import math
-import numpy as np
-import pandas as pd
 from pathlib import Path
+from typing import Any, Callable, Dict, List, Mapping, Optional, TypedDict, cast
+
+import pandas as pd
 
 # ---------- Parameters ----------
 m = 8
 targets = [1e-12, 1e-15, 1e-30]
-exponents = np.arange(-4.0, -15.0, -0.5)  # -4, -4.5, ..., -15
-ei_grid = 10.0 ** exponents
+
+
+def _frange(start: float, stop: float, step: float) -> List[float]:
+    """Return values analogous to numpy.arange but using pure Python."""
+
+    if step == 0.0:
+        raise ValueError("step must be non-zero")
+
+    values: List[float] = []
+    current = start
+    comparator: Callable[[float, float], bool]
+    comparator = (lambda a, b: a > b) if step < 0 else (lambda a, b: a < b)
+    while comparator(current, stop):
+        values.append(current)
+        current += step
+
+    if values:
+        last = values[-1]
+        if (step < 0 and last > stop) or (step > 0 and last < stop):
+            if not math.isclose(last, stop):
+                values.append(stop)
+    else:
+        values.append(start)
+    return values
+
+
+exponents = _frange(-4.0, -15.0, -0.5)  # -4, -4.5, ..., -15
+ei_grid = [10.0 ** exp for exp in exponents]
 k_candidates = [16, 128, 512]
 n_min, n_max = 0, 1024
 
@@ -39,6 +47,15 @@ n_min, n_max = 0, 1024
 LIB = "/w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT"
 clock_ps = 5000.0  # 5.0 ns
 # -------------------------------
+
+class SelectionResult(TypedDict):
+    n: int
+    k: int
+    m: int
+    t: int
+    rate: float
+    post_ber_est: float
+
 
 def symbol_error_from_bit_error(p_b: float, m: int) -> float:
     return 1.0 - (1.0 - p_b) ** m
@@ -59,7 +76,7 @@ def rs_post_ber(p_b: float, n: int, k: int, m: int) -> float:
     logfact = [0.0]
     for i in range(1, n + 1):
         logfact.append(logfact[-1] + math.log(i))
-    def logC(nv, iv):
+    def logC(nv: int, iv: int) -> float:
         return logfact[nv] - logfact[iv] - logfact[nv - iv]
 
     ber = 0.0
@@ -69,7 +86,7 @@ def rs_post_ber(p_b: float, n: int, k: int, m: int) -> float:
         ber += 0.5 * (i / n) * pmf
     return ber
 
-def minimal_n_for_target(p_b: float, target: float, k: int):
+def minimal_n_for_target(p_b: float, target: float, k: int) -> Optional[SelectionResult]:
     """Return minimal-n solution for this k that meets target (if any)."""
     n_start = max(k + 2, n_min)
     if (n_start - k) % 2 == 1:
@@ -83,9 +100,9 @@ def minimal_n_for_target(p_b: float, target: float, k: int):
             }
     return None
 
-def choose_best_over_k(p_b: float, target: float):
+def choose_best_over_k(p_b: float, target: float) -> Optional[SelectionResult]:
     """Pick highest rate across k; tie-break smaller n."""
-    cands = []
+    cands: List[SelectionResult] = []
     for k in k_candidates:
         sol = minimal_n_for_target(p_b, target, k)
         if sol:
@@ -95,17 +112,17 @@ def choose_best_over_k(p_b: float, target: float):
     cands.sort(key=lambda d: (-d["rate"], d["n"]))
     return cands[0]
 
-def main():
-    rows = []
+def main() -> None:
+    rows: List[Dict[str, Any]] = []
     for target in targets:
         for p_b in ei_grid:
             best = choose_best_over_k(p_b, target)
-            row = {"target_post_BER": target, "input_preFEC_BER": p_b}
+            row: Dict[str, Any] = {"target_post_BER": target, "input_preFEC_BER": p_b}
             if best is None:
                 row.update({"n": None, "k": None, "m": m, "t": None, "rate": None,
                             "post_ber_est": None, "note": "No RS(n,k) with m=8, n<=255 met the target"})
             else:
-                row.update(best)
+                row.update(cast(Mapping[str, Any], best))
                 row["note"] = ""
             rows.append(row)
 

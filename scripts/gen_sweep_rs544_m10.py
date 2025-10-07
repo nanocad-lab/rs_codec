@@ -55,7 +55,7 @@ def build_lines(f_min_mhz: float, f_max_mhz: float, step_mhz: float, lib: str) -
     return hdr + lines
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser(description="Generate clock sweep config for RS(544,514) GF10 (ASAP7)")
     ap.add_argument("--out", type=Path, default=Path("config/sweep_configs_asap7_rs544_m10_clk_sweep.txt"),
                     help="Output config file path")

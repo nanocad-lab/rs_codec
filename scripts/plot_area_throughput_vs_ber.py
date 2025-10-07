@@ -4,12 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import math
 from itertools import cycle
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Iterator, Optional, TypedDict
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
 
@@ -23,6 +23,23 @@ SUMMARY_ROOT_CANDIDATES = (ROOT / "newdata",)
 
 M = 8  # GF symbol width
 CYCLES_PER_SYMBOL = 2.0  # decoder consumes two cycles per symbol
+
+
+AreaRow = TypedDict(
+    "AreaRow",
+    {
+        "tech": str,
+        "target_post_BER": float,
+        "input_preFEC_BER": float,
+        "n": int,
+        "rate": float,
+        "clk_ns": float,
+        "area_total_um2": float,
+        "area_total_mm2": float,
+        "throughput_gbps": float,
+        "area_per_gbps": float,
+    },
+)
 
 
 def find_summary_path(tech: str) -> Path:
@@ -66,13 +83,13 @@ def load_or_generate_selection(args: argparse.Namespace, targets: list[float]) -
 
 def match_target_ber(value: float, targets: Iterable[float]) -> Optional[float]:
     for target in targets:
-        if np.isclose(value, target, rtol=1e-2, atol=0.0):
+        if math.isclose(value, target, rel_tol=1e-2, abs_tol=0.0):
             return float(target)
     return None
 
 
 def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
-    rows: list[dict[str, float]] = []
+    rows: list[AreaRow] = []
     for tech in SUMMARY_TECHS:
         summary_path = find_summary_path(tech)
         summary = pd.read_csv(summary_path)
@@ -111,15 +128,15 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
             rows.append(
                 {
                     "tech": tech,
-                    "target_post_BER": sel["target_post_BER"],
-                    "input_preFEC_BER": sel["input_preFEC_BER"],
-                    "n": sel["n"],
-                    "rate": sel["rate"],
-                    "clk_ns": clk_ns,
-                    "area_total_um2": area_total_um2,
-                    "area_total_mm2": area_total_mm2,
-                    "throughput_gbps": throughput_gbps,
-                    "area_per_gbps": area_per_gbps,
+                    "target_post_BER": float(sel["target_post_BER"]),
+                    "input_preFEC_BER": float(sel["input_preFEC_BER"]),
+                    "n": int(sel["n"]),
+                    "rate": float(sel["rate"]),
+                    "clk_ns": float(clk_ns),
+                    "area_total_um2": float(area_total_um2),
+                    "area_total_mm2": float(area_total_mm2),
+                    "throughput_gbps": float(throughput_gbps),
+                    "area_per_gbps": float(area_per_gbps),
                 }
             )
 
@@ -136,8 +153,8 @@ def plot_area_vs_ber(df: pd.DataFrame, targets: list[float]) -> None:
 
     bers_sorted = sorted(targets)
     colors = sns.color_palette("tab10", len(bers_sorted))
-    marker_cycle_left: Iterable[str] = cycle(("o", "s", "d", "^"))
-    marker_cycle_right: Iterable[str] = cycle(("^", "v", "<", ">"))
+    marker_cycle_left: Iterator[str] = cycle(("o", "s", "d", "^"))
+    marker_cycle_right: Iterator[str] = cycle(("^", "v", "<", ">"))
 
     nan_lines = []
     nan_labels = []

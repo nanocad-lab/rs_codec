@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import math
 from pathlib import Path
-from typing import Iterable, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple, TypedDict
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -23,6 +23,21 @@ SUMMARY_ROOT_CANDIDATES = (ROOT / "newdata",)
 
 GF_SYMBOL_WIDTH = 8
 DECODER_CYCLES = 2.0  # decoder uses two cycles per symbol
+
+
+EnergyRow = TypedDict(
+    "EnergyRow",
+    {
+        "tech": str,
+        "BER Target": float,
+        "input_preFEC_BER": float,
+        "n": int,
+        "t": int,
+        "rate": float,
+        "energy": float,
+        "p_correctable": float,
+    },
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -107,7 +122,7 @@ def p_correctable(n: int, t: int, p_b: float) -> float:
 
 
 def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
-    rows: list[dict[str, float]] = []
+    rows: List[EnergyRow] = []
     for tech in SUMMARY_TECHS:
         summary_path = find_summary_path(tech)
         summary = pd.read_csv(summary_path)
