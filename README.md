@@ -1,6 +1,6 @@
 # rs_codec
 
-**If you're already using this repo, see this patch: https://github.com/mateusgs/rs_codec/commit/4ca278ca88efe6b2975cf8431e16ef8106898bb4**
+**If you're already using this repo, see this patch: <https://github.com/mateusgs/rs_codec/commit/4ca278ca88efe6b2975cf8431e16ef8106898bb4>**
 
 This project comprises the RTL developement of a paramerizable RS Codec. It provides both RS encoder and decoder, and the following parameters that be adjusted in their instantiation.
 
@@ -23,7 +23,7 @@ clk - I - System clock pin \
 rst - I - System reset pin \
 i_start_cw - I - Delimiter of input codeword start \
 i_end_cw - I - Delimiter of input codeword end \
-i_valid - I - Validity of input symbols \ 
+i_valid - I - Validity of input symbols \
 i_consume - I - Consumes output of the codec \
 i_symbol - I - Input data symbol \
 o_start_cw - O - Delimiter of output codeword starting \
@@ -33,7 +33,6 @@ o_valid - O - Validity of output symbols \
 o_error - O - Error indicator \
 o_symbol - O - Output data symbol
 
-
 The top level .vhd files are: rs_decoder.vhd and rs_encoder.vhd
 
 If you look the directory structure, inside the projects (rs_decoder and rs_encoder) there are four folders:
@@ -41,22 +40,24 @@ If you look the directory structure, inside the projects (rs_decoder and rs_enco
 rtl - VHDL implementation of the IP \
 sim - RTL simlulation scripts using Mentor ModelSim Student Edition \
 formal - Scripts for formal verification using Cadence JasperGold Apps \
-syn - Script for synthesis in FPGA using Quartus Prime Lite Edition 
+syn - Script for synthesis in FPGA using Quartus Prime Lite Edition
 
 There is a paper that explain all nuances of this project:
-https://ietresearch.onlinelibrary.wiley.com/doi/10.1049/cdt2.12009
+<https://ietresearch.onlinelibrary.wiley.com/doi/10.1049/cdt2.12009>
 
 This project started at Universidade Federal de Minas Gerais (UFMG), and it is open for the community under the license "MIT".
-Contact matgonsil@gmail.com (Mateus Silva) for any questions.
+Contact <matgonsil@gmail.com> (Mateus Silva) for any questions.
 
 Synthesis Sweeps (Design Compiler)
+
 - Multi-config synthesis sweep scripts and configs are included to evaluate area/timing/power across RS blocks.
 - See `README_sweep_asap7.md` for details. It covers ASAP7 (via `config/sweep_configs_asap7.txt`) and Nangate45 (via `config/sweep_configs_nangate45.txt`),
   along with a Python helper that can split configuration files across multiple Design Compiler workers.
 - Outputs per run include standard reports and a summary CSV with columns:
   - `label,top,N,K,GF_WIDTH,CLK_NS,area,wns,total_dyn_mw`.
 
-**Plots: Energy/Rate vs Input BER**
+## Plots: Energy/Rate vs Input BER
+
 - Script: `scripts/plot_rs_codec_vs_ber.py`
 - Inputs:
   - RS-FEC selection: `rsfec_selection_m8_halfdec.csv` (from `scripts/rsfec_select_and_cfg.py`)

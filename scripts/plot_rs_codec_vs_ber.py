@@ -34,7 +34,6 @@ Usage
 
 import argparse
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 import seaborn as sns
@@ -162,7 +161,7 @@ def plot_pj_per_bit_vs_ber(df: pd.DataFrame, outpath: Path, style: str) -> None:
     plt.figure(figsize=(7.5, 5.0))
     # Order targets for consistent legend
     # Use formatted labels like '1e-12', '1e-15', '1e-30'
-    order = [lbl for _, lbl in sorted({(e, l) for e, l in zip(df["target_exp"], df["target_label"])})]
+    order = [lbl for _, lbl in sorted({(exp, lbl) for exp, lbl in zip(df["target_exp"], df["target_label"])})]
     ax = sns.lineplot(
         data=df,
         x="input_preFEC_BER",
@@ -195,7 +194,7 @@ def plot_pj_per_bit_vs_ber(df: pd.DataFrame, outpath: Path, style: str) -> None:
 def plot_rate_vs_ber(df: pd.DataFrame, outpath: Path, style: str) -> None:
     sns.set_style(style)
     plt.figure(figsize=(7.5, 5.0))
-    order = [lbl for _, lbl in sorted({(e, l) for e, l in zip(df["target_exp"], df["target_label"])})]
+    order = [lbl for _, lbl in sorted({(exp, lbl) for exp, lbl in zip(df["target_exp"], df["target_label"])})]
     ax = sns.lineplot(
         data=df,
         x="input_preFEC_BER",
