@@ -24,7 +24,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Optional, Sequence, TextIO
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -218,8 +218,8 @@ def main(argv: Sequence[str]) -> int:
         worker_cmds.append(cmd)
 
     # Python 3.6 compatibility: avoid subscripting subprocess.Popen in annotations
-    procs = []  # type: List[subprocess.Popen]
-    log_files = []
+    procs: List[subprocess.Popen[str]] = []
+    log_files: List[Optional[TextIO]] = []
     try:
         for idx, cmd in enumerate(worker_cmds):
             log_path = args.out_root / f"worker_{idx}.log"

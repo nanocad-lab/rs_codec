@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import math
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable, List, Optional, Protocol, Sequence, TypedDict, cast
 
-import numpy as np
 import pandas as pd
 
 
@@ -15,15 +16,61 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
 
-def _load_selector():
-    spec_path = ROOT / "scripts" / "rsfec_select_and_cfg.py"
-    import importlib.util
+def _frange(start: float, stop: float, step: float) -> List[float]:
+    if step == 0.0:
+        raise ValueError("step must be non-zero")
 
+    values: List[float] = []
+    current = start
+    comparator: Callable[[float, float], bool]
+    comparator = (lambda a, b: a > b) if step < 0 else (lambda a, b: a < b)
+    while comparator(current, stop):
+        values.append(current)
+        current += step
+
+    if values:
+        last = values[-1]
+        if (step < 0 and last > stop) or (step > 0 and last < stop):
+            if not math.isclose(last, stop):
+                values.append(stop)
+    else:
+        values.append(start)
+    return values
+
+
+class SelectionResult(TypedDict):
+    n: int
+    k: int
+    m: int
+    t: int
+    rate: float
+    post_ber_est: float
+
+
+class SelectorModule(Protocol):
+    targets: Sequence[float]
+
+    def minimal_n_for_target(self, p_b: float, target: float, k: int) -> Optional[SelectionResult]:
+        ...
+
+
+class SweepRow(TypedDict):
+    target_post_BER: float
+    input_preFEC_BER: float
+    n: Optional[int]
+    t: Optional[int]
+    rate: Optional[float]
+    post_ber_est: Optional[float]
+
+
+def _load_selector() -> SelectorModule:
+    spec_path = ROOT / "scripts" / "rsfec_select_and_cfg.py"
     module_spec = importlib.util.spec_from_file_location("rsfec_select_and_cfg", spec_path)
+    if module_spec is None or module_spec.loader is None:
+        raise ImportError(f"Could not load module spec for {spec_path}")
     module = importlib.util.module_from_spec(module_spec)
-    assert module_spec.loader is not None
     module_spec.loader.exec_module(module)
-    return module
+    return cast(SelectorModule, module)
 
 
 def generate_sweep(
@@ -41,18 +88,18 @@ def generate_sweep(
     target_list = list(targets) if targets is not None else list(selector.targets)
 
     step = exp_step if (exp_stop - exp_start) * exp_step > 0 else -exp_step
-    exponents = np.arange(exp_start, exp_stop + (step / abs(step)) * 1e-9, step)
-    p_b_grid = 10.0 ** exponents
+    exponents = _frange(exp_start, exp_stop, step)
+    p_b_grid = [10.0 ** exp for exp in exponents]
 
-    rows = []
+    rows: List[SweepRow] = []
     for target in target_list:
         for p_b in p_b_grid:
-            sol = selector.minimal_n_for_target(p_b, target, k)
+            sol = selector.minimal_n_for_target(float(p_b), float(target), k)
             if sol is None:
                 rows.append(
                     {
                         "target_post_BER": float(target),
-                        "input_preFEC_BER": p_b,
+                        "input_preFEC_BER": float(p_b),
                         "n": None,
                         "t": None,
                         "rate": None,
@@ -63,7 +110,7 @@ def generate_sweep(
                 rows.append(
                     {
                         "target_post_BER": float(target),
-                        "input_preFEC_BER": p_b,
+                        "input_preFEC_BER": float(p_b),
                         "n": sol["n"],
                         "t": sol["t"],
                         "rate": sol["rate"],
