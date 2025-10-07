@@ -7,8 +7,8 @@
 # - Produces power, area, and timing reports per run
 #
 # Usage:
-#   dc_shell -f scripts/run_sweep_asap7.tcl \
-#     -x "set CONFIG_FILE sweep_configs_asap7.txt" \
+#   dc_shell -f scripts/run_asap7.tcl \
+#     -x "set CONFIG_FILE config/sweep_configs_asap7.txt" \
 #     -x "set OUT_ROOT data/asap7_sweep"
 # Or, for Nangate45, use the convenience wrapper:
 #   dc_shell -f scripts/run_nangate45.tcl
@@ -24,16 +24,20 @@
 
 # --------- User/Env overrides ---------
 if {![info exists CONFIG_FILE]} {
-  set CONFIG_FILE "sweep_configs_asap7.txt"
+  set CONFIG_FILE "config/sweep_configs_asap7_exhaustive.txt"
 }
 if {![info exists OUT_ROOT]} {
-  set OUT_ROOT "data/asap7_sweep"
+  set OUT_ROOT "data/asap7_sweep_gate_512"
+}
+if {![info exists SUMMARY_FILE]} {
+  set SUMMARY_FILE "$OUT_ROOT/summary.csv"
 }
 if {![info exists DEFAULT_LIB_DIR]} {
   # Optional: falls back when a config line omits the lib dir
   set DEFAULT_LIB_DIR ""
 }
 # Clock must be specified per config; no default
+set_host_options -max_cores 16
 
 # --------- Paths ---------
 set REPO_ROOT [pwd]
@@ -300,7 +304,7 @@ proc elaborate_with_generics {top n k gf_width clk_ns} {
 }
 
 proc run_one_config {idx n k gf_width clock_ps lib_dir top} {
-  global REPO_ROOT RTL_ROOT OUT_ROOT GEN_TYPES_TEMPLATE WRAPPER_TEMPLATE
+  global REPO_ROOT RTL_ROOT OUT_ROOT GEN_TYPES_TEMPLATE WRAPPER_TEMPLATE SUMMARY_FILE
 
   set two_t       [expr {$n - $k}]
   set word_width  [expr {[gf_width_to_word_width_minus1 $gf_width] + 1}]
@@ -362,8 +366,7 @@ proc run_one_config {idx n k gf_width clock_ps lib_dir top} {
     puts "[format {ERROR: Elaborate failed for top '%s' (N=%d K=%d GF=%d): %s} $top $n $k $gf_width $elab_err]"
     return
   }
-  # Ensure current_design is set explicitly and stays on target top
-  catch { current_design $elab_top }
+  # Capture the actual elaborated design name (DC appends parameters)
   set cur_top [get_object_name [current_design]]
   puts "[format {INFO: Elaborated top: %s (current_design=%s)} $elab_top $cur_top]"
   # Guard: if requested top didn't elaborate, abort this run (prevents mis-attributed reports)
@@ -376,27 +379,55 @@ proc run_one_config {idx n k gf_width clock_ps lib_dir top} {
   link
 
   # Basic constraints (clk/rst)
+  # Query the library's time unit to ensure correct clock period specification
+  # Libraries may use different time units (e.g., ASAP7 uses ps, NanGate uses ns)
+  # Use report_units to get the actual time unit
+  set time_unit_val 1e-12
+  set time_unit_str "ps"
+  if {[catch {
+    redirect -variable units_output {report_units}
+    # Parse output like "Time_unit            : 1.0e-09 Second(ns)"
+    if {[regexp {Time_unit\s*:\s*([0-9.eE+\-]+)\s*Second} $units_output -> tu_val]} {
+      set time_unit_val [expr {double($tu_val)}]
+      if {$time_unit_val >= 1e-9} {
+        set time_unit_str "ns"
+      } elseif {$time_unit_val >= 1e-12} {
+        set time_unit_str "ps"
+      }
+    }
+  } err]} {
+    puts "WARN: Could not query time_unit via report_units: $err, assuming ps"
+  }
+
+  # Convert clock period from ps to library's time unit
+  # If library uses ns (1e-9), need to divide by 1000
+  # If library uses ps (1e-12), use as-is
+  set ps_to_lib_unit [expr {1.0e-12 / $time_unit_val}]
+  set clock_period_lib_units [expr {$clock_ps * $ps_to_lib_unit}]
+
+  puts [format "INFO: Library time unit: %e seconds (%s), clock period: %.3f ps = %.6f %s" \
+        $time_unit_val $time_unit_str $clock_ps $clock_period_lib_units $time_unit_str]
+
   set CLK_PIN clk
   set RST_PIN rst
-  create_clock -name clk -period $clk_ns [get_ports $CLK_PIN]
+  # Use clock period in library's native time units
+  create_clock -name clk -period $clock_period_lib_units [get_ports $CLK_PIN]
   set_dont_touch [get_ports $RST_PIN]
   set_ideal_network [get_ports $RST_PIN]
   set_false_path -from [get_ports $RST_PIN]
-  set_max_fanout 20 [current_design]
+  set_max_fanout 128 [current_design]
 
   # Power: assume random data on data inputs only and standard clock switching
   # - Data ports (e.g., i_symbol*): P=0.5, toggle_rate=0.5 toggles/cycle
   # - Other primary inputs (control/handshake): no switching
   # - Reset: no switching
-  # Use toggle rate per-ns to match typical DC expectations.
-  set trand_toggle_rate [expr {0.5 / $clk_ns}]
   catch {
     set all_in   [all_inputs]
     set clk_port [get_ports $CLK_PIN]
     set rst_port [get_ports $RST_PIN]
     set data_ports [get_ports -quiet {i_symbol*}]
     if {[sizeof_collection $data_ports] > 0} {
-      set_switching_activity -static_probability 0.5 -toggle_rate $trand_toggle_rate $data_ports
+      set_switching_activity -static_probability 0.5 -toggle_rate 0.5 -base_clock clk $data_ports
     }
     set non_data [remove_from_collection $all_in [list $clk_port $rst_port $data_ports]]
     if {[sizeof_collection $non_data] > 0} {
@@ -419,8 +450,6 @@ proc run_one_config {idx n k gf_width clock_ps lib_dir top} {
       }
     }
   }
-  # Increase power analysis effort
-  catch { set_power_analysis_options -analysis_effort medium }
 
   # Optional user constraints in CWD
   if {[file exists "constraints.tcl"]} {
@@ -429,18 +458,23 @@ proc run_one_config {idx n k gf_width clock_ps lib_dir top} {
 
   # Compile
   uniquify
-  compile_ultra -no_autoungroup -no_boundary_optimization
-  # Reassert current_design in case compile changes focus
-  catch { current_design $elab_top }
+  compile_ultra -retime -no_autoungroup -gate_clock -timing_high_effort_script -area_high_effort_script
+  # Reassert current_design in case compile changes focus (use actual elaborated name)
+  catch { current_design $cur_top }
 
   # Reports and outputs
   set topModule [get_object_name [current_design]]
   # Preserve label using requested top name; topModule may differ if alias is used
   write -f ddc -o "$run_root/$topModule.compile.ddc" -hierarchy
+  report_units                   > "$rpt_dir/${topModule}_units.rep"
   report_qor                      > "$rpt_dir/${topModule}_qor.rep"
+  report_clocks         > "$rpt_dir/${topModule}_clocks.rep"
+  check_timing          > "$rpt_dir/${topModule}_check_timing.rep"
   report_timing -significant_digits 6 > "$rpt_dir/${topModule}_timing.rep"
   report_clock                   > "$rpt_dir/${topModule}_clock.rep"
-  report_power -analysis_effort medium -significant_digits 6 > "$rpt_dir/${topModule}_power.rep"
+  report_power -analysis_effort high -significant_digits 6 > "$rpt_dir/${topModule}_power.rep"
+  report_power -hierarchy -analysis_effort high -significant_digits 6 > "$rpt_dir/${topModule}_power_hierarchy.rep"
+  report_clock_gating > "$rpt_dir/${topModule}_clock_gating.rep"
   report_area -hierarchy             > "$rpt_dir/${topModule}_area.rep"
   report_path_group                 > "$rpt_dir/${topModule}_pathgroup.rep"
 
@@ -454,7 +488,11 @@ proc run_one_config {idx n k gf_width clock_ps lib_dir top} {
   puts "[format {INFO: Completed run %d: %s} $idx $label]"
 
   # Summarize results into OUT_ROOT/summary.csv
-  set summary "$OUT_ROOT/summary.csv"
+  set summary $SUMMARY_FILE
+  set summary_dir [file dirname $summary]
+  if {$summary_dir ne ""} {
+    mkdir_p $summary_dir
+  }
   set area ""
   set wns  ""
   set pwr_mw ""
@@ -572,3 +610,8 @@ while {[gets $fh line] >= 0} {
 close $fh
 
 puts "[format {INFO: Sweep complete. Outputs under: %s} $OUT_ROOT]"
+
+# If invoked by the parallel Python wrapper, close dc_shell so Popen can exit
+if {[info exists ::RUN_SWEEP_AUTO_EXIT] && $::RUN_SWEEP_AUTO_EXIT} {
+  exit 0
+}
