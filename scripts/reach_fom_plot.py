@@ -13,6 +13,7 @@ import seaborn as sns
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
+BER_TARGETS = (1e-20, 1e-30)
 
 
 @dataclass(frozen=True)
@@ -52,8 +53,8 @@ BASE_DATASET_NODES = {
 
 
 def choose_dataset(process_nm: float) -> str:
-    # Select FEC dataset whose nominal process is closest to the target.
-    return min(BASE_DATASET_NODES.keys(), key=lambda name: abs(process_nm - BASE_DATASET_NODES[name]))
+    # ASAP7 models advanced nodes; NanGate45 covers larger processes.
+    return "ASAP7" if process_nm <= 16 else "NanGate45"
 
 
 def map_process_to_model(process_nm: float) -> int:
@@ -74,7 +75,14 @@ def load_links(path: Path) -> pd.DataFrame:
 
 def closest_row_by_ber(df: pd.DataFrame, target_ber: float) -> pd.Series:
     ber_col = "plot_ber" if "plot_ber" in df.columns else "input_preFEC_BER"
-    idx = (df[ber_col].astype(float) - target_ber).abs().idxmin()
+    ber_values = df[ber_col].astype(float)
+    meets_target = ber_values >= target_ber
+
+    if meets_target.any():
+        idx = ber_values[meets_target].idxmin()
+    else:
+        idx = ber_values.idxmax()
+
     return df.loc[idx]
 
 
@@ -91,12 +99,13 @@ def compute_metrics() -> pd.DataFrame:
         dataset = choose_dataset(process_nm)
         base_node = BASE_DATASET_NODES[dataset]
         fec_df = fec_data[dataset]
-        fec_row = closest_row_by_ber(fec_df, link["BER"])
+        link_ber = float(link["BER"])
 
-        code_rate = fec_row["rate"]
-        fec_energy = fec_row["energy"]
+        fec_df = fec_df.copy()
+        if "BER Target" in fec_df.columns:
+            fec_df["BER Target"] = fec_df["BER Target"].astype(float)
+
         energy_factor_base = ENERGY_MODELS[base_node].energy_factor()
-
         if process_nm < 7:
             tsmc_scale, tsmc_ref = tsmc_scaling_factor(process_nm)
             energy_factor_target = energy_factor_base * tsmc_scale
@@ -107,60 +116,84 @@ def compute_metrics() -> pd.DataFrame:
             energy_factor_target = ENERGY_MODELS[target_node].energy_factor()
             scaling_source = f"Polynomial_{target_node}nm"
 
-        fec_energy_scaled = fec_energy * (energy_factor_target / energy_factor_base)
-
         gbps_per_mm = link["Gbps_per_mm"]
         link_energy = link["pJ_per_bit"]
+        reach_mm = link["Reach_mm"]
 
-        fom_raw = gbps_per_mm / link_energy
-        numerator = gbps_per_mm * code_rate
-        denom_unscaled = (link_energy / code_rate) + fec_energy
-        denom_scaled = (link_energy / code_rate) + fec_energy_scaled
+        for target_ber in BER_TARGETS:
+            code_rate = 1.0
+            fec_energy = 0.0
+            fec_energy_scaled = 0.0
 
-        rows.append(
-            {
-                "Name": link["Name"],
-                "Process_nm": process_nm,
-                "Reach_mm": link["Reach_mm"],
-                "Gbps_per_mm": gbps_per_mm,
-                "Link_pJ_per_bit": link_energy,
-                "BER": link["BER"],
-                "Chosen_FEC_dataset": dataset,
-                "Base_node_nm": base_node,
-                "Target_model_node_nm": target_node,
-                "FEC_code_rate": code_rate,
-                "FEC_energy_pJ_source": fec_energy,
-                "FEC_energy_pJ_scaled": fec_energy_scaled,
-                "FoM_raw": fom_raw,
-                "FoM_fec_unscaled": numerator / denom_unscaled,
-                "FoM_fec_scaled": numerator / denom_scaled,
-                "Energy_factor_base": energy_factor_base,
-                "Energy_factor_target": energy_factor_target,
-                "Energy_scaling_source": scaling_source,
-            }
-        )
+            if link_ber > target_ber:
+                target_df = fec_df
+                if "BER Target" in fec_df.columns:
+                    target_rows = fec_df[np.isclose(fec_df["BER Target"], target_ber, rtol=0.0, atol=1e-40)]
+                    if not target_rows.empty:
+                        target_df = target_rows
+
+                fec_row = closest_row_by_ber(target_df, link_ber)
+                code_rate = float(fec_row["rate"])
+                fec_energy = float(fec_row["energy"])
+                fec_energy_scaled = fec_energy * (energy_factor_target / energy_factor_base)
+
+            fom_raw = gbps_per_mm / link_energy
+            numerator = gbps_per_mm * code_rate
+            denom_unscaled = (link_energy / code_rate) + fec_energy
+            denom_scaled = (link_energy / code_rate) + fec_energy_scaled
+
+            rows.append(
+                {
+                    "Name": link["Name"],
+                    "Process_nm": process_nm,
+                    "Reach_mm": reach_mm,
+                    "Gbps_per_mm": gbps_per_mm,
+                    "Link_pJ_per_bit": link_energy,
+                    "BER": link_ber,
+                    "BER_target": target_ber,
+                    "Chosen_FEC_dataset": dataset,
+                    "Base_node_nm": base_node,
+                    "Target_model_node_nm": target_node,
+                    "FEC_code_rate": code_rate,
+                    "FEC_energy_pJ_source": fec_energy,
+                    "FEC_energy_pJ_scaled": fec_energy_scaled,
+                    "FoM_raw": fom_raw,
+                    "FoM_fec_unscaled": numerator / denom_unscaled,
+                    "FoM_fec_scaled": numerator / denom_scaled,
+                    "Energy_factor_base": energy_factor_base,
+                    "Energy_factor_target": energy_factor_target,
+                    "Energy_scaling_source": scaling_source,
+                }
+            )
 
     return pd.DataFrame(rows)
 
 
 def write_outputs(df: pd.DataFrame) -> None:
+    df_sorted = df.sort_values(["Name", "BER_target"]).reset_index(drop=True)
     out_csv = ROOT / "plots" / "reach_vs_fom_scaled.csv"
-    df.to_csv(out_csv, index=False)
+    df_sorted.to_csv(out_csv, index=False)
 
     sns.set_style("darkgrid")
     fig, ax = plt.subplots(figsize=(8, 5))
-    colors = sns.color_palette("tab10", len(df))
+    ordered_names = list(dict.fromkeys(df_sorted["Name"]))
+    colors = sns.color_palette("tab10", len(ordered_names))
+    name_to_color = dict(zip(ordered_names, colors))
 
-    for color, (_, row) in zip(colors, df.iterrows()):
-        reach = row["Reach_mm"]
-        fom_raw = row["FoM_raw"]
-        fom_scaled = row["FoM_fec_scaled"]
+    target_markers = {1e-20: "+", 1e-30: "^"}
 
-        ax.scatter(reach, fom_raw, marker="o", color=color, s=45)
-        ax.scatter(reach, fom_scaled, marker="^", color=color, s=55)
-        ax.plot([reach, reach], [fom_raw, fom_scaled], color=color, linewidth=0.9)
+    for name in ordered_names:
+        group = df_sorted[df_sorted["Name"] == name]
+        if group.empty:
+            continue
+
+        color = name_to_color[name]
+        reach = group.iloc[0]["Reach_mm"]
+        fom_raw = group.iloc[0]["FoM_raw"]
+
+        ax.scatter(reach, fom_raw, marker="x", color=color, s=45)
         ax.annotate(
-            row["Name"],
+            name,
             (reach, fom_raw),
             textcoords="offset points",
             xytext=(6, 4),
@@ -168,20 +201,40 @@ def write_outputs(df: pd.DataFrame) -> None:
             color=color,
         )
 
+        for _, row in group.iterrows():
+            target_ber = row["BER_target"]
+            marker = target_markers.get(target_ber, "D")
+            fom_scaled = row["FoM_fec_scaled"]
+
+            ax.scatter(reach, fom_scaled, marker=marker, color=color, s=55)
+            ax.plot([reach, reach], [fom_raw, fom_scaled], color=color, linewidth=0.9)
+
     ax.set_xscale("log")
-    ax.set_xlim(xmax=1e3)
+    ax.set_xlim(xmax=1e5)
     ax.set_yscale("log")
     ax.set_xlabel("Reach (mm)")
-    ax.set_ylabel("FoM")
-    ax.set_title("Reach vs FoM (Raw vs FEC-Corrected)")
+    ax.set_ylabel("FoM (Gbps/mm)/(pJ/bit)")
+    ax.set_title("Reach vs FoM (Raw vs FEC @ 1e-15 & 1e-30)")
     ax.grid(True, which="both", linestyle="--", linewidth=0.6)
 
     from matplotlib.lines import Line2D
 
     legend_handles = [
-        Line2D([0], [0], marker="o", color="w", markerfacecolor="black", markersize=6, linestyle="None", label="Raw FoM"),
-        Line2D([0], [0], marker="^", color="w", markerfacecolor="black", markersize=6, linestyle="None", label="FEC-corrected FoM"),
+        Line2D([0], [0], marker="x", color="black", markerfacecolor="black", markersize=6, linestyle="None", label="Raw FoM")
     ]
+    for target_ber, marker in target_markers.items():
+        legend_handles.append(
+            Line2D(
+                [0],
+                [0],
+                marker=marker,
+                color="black",
+                markerfacecolor="black",
+                markersize=6,
+                linestyle="None",
+                label=f"FEC FoM @ {target_ber:.0e}",
+            )
+        )
     ax.legend(handles=legend_handles, loc="lower left")
 
     fig.tight_layout()
