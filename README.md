@@ -60,12 +60,12 @@ Synthesis Sweeps (Design Compiler)
 
 - Script: `scripts/plot_rs_codec_vs_ber.py`
 - Inputs:
-  - RS-FEC selection: `rsfec_selection_m8_halfdec.csv` (from `scripts/rsfec_select_and_cfg.py`)
-  - Synthesis summary: `data/asap7_sweep_512/summary.csv`
+  - RS-FEC selection: `rsfec_selection_m8_n86.csv` (from `scripts/rsfec_select_and_cfg.py`)
+  - Synthesis summary: `data/asap7_sweep_n86/summary.csv`
 - Run:
-  - `python scripts/plot_rs_codec_vs_ber.py --selection rsfec_selection_m8_halfdec.csv --summary data/asap7_sweep_512/summary.csv`
+  - `python scripts/plot_rs_codec_vs_ber.py --selection rsfec_selection_m8_n86.csv --summary data/asap7_sweep_n86/summary.csv`
   - With decoder clock gating (syndrome-only for clean words):
-    - `python scripts/plot_rs_codec_vs_ber.py --selection rsfec_selection_m8_halfdec.csv --summary data/asap7_sweep_512/summary.csv --gated --syndrome-cycles-per-symbol 1 --decoder-cycles-per-symbol 2`
+    - `python scripts/plot_rs_codec_vs_ber.py --selection rsfec_selection_m8_n86.csv --summary data/asap7_sweep_n86/summary.csv --gated --syndrome-cycles-per-symbol 1 --decoder-cycles-per-symbol 2`
 - Outputs (under `plots/`):
   - Figures (PNG + PDF): `rscodec_pj_per_bit_vs_input_BER.*`, `rscodec_rate_vs_input_BER.*`
   - Raw data (CSV): `rscodec_pj_per_bit_vs_input_BER.csv`, `rscodec_rate_vs_input_BER.csv`

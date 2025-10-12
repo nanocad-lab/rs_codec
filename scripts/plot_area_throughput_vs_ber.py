@@ -19,10 +19,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
 SUMMARY_TECHS = ("ASAP7", "NanGate45")
-SUMMARY_ROOT_CANDIDATES = (ROOT / "newdata",)
-
-M = 8  # GF symbol width
+SUMMARY_ROOT_CANDIDATES = (ROOT / "paperdata", ROOT / "newdata")
 CYCLES_PER_SYMBOL = 2.0  # decoder consumes two cycles per symbol
+DECODER_TOP = "rs_decoder"
 
 
 AreaRow = TypedDict(
@@ -43,7 +42,7 @@ AreaRow = TypedDict(
 
 
 def find_summary_path(tech: str) -> Path:
-    tech_dir = f"{tech.lower()}_opt_sweep"
+    tech_dir = f"{tech.lower()}_code_sweep"
     for base in SUMMARY_ROOT_CANDIDATES:
         candidate = base / tech_dir / "summary.csv"
         if candidate.exists():
@@ -82,10 +81,22 @@ def load_or_generate_selection(args: argparse.Namespace, targets: list[float]) -
 
 
 def match_target_ber(value: float, targets: Iterable[float]) -> Optional[float]:
+    if value <= 0.0:
+        return None
+
+    log_value = math.log10(value)
+    best_target: Optional[float] = None
+    best_distance: Optional[float] = None
+
     for target in targets:
-        if math.isclose(value, target, rel_tol=1e-2, abs_tol=0.0):
-            return float(target)
-    return None
+        if target <= 0.0:
+            continue
+        distance = abs(math.log10(target) - log_value)
+        if best_distance is None or distance < best_distance:
+            best_distance = distance
+            best_target = float(target)
+
+    return best_target
 
 
 def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
@@ -94,7 +105,7 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
         summary_path = find_summary_path(tech)
         summary = pd.read_csv(summary_path)
         summary["cycles"] = summary["top"].map(
-            lambda top: CYCLES_PER_SYMBOL if top == "rs_decoder_plus_syndrome" else 1.0
+            lambda top: CYCLES_PER_SYMBOL if top == DECODER_TOP else 1.0
         )
         summary["energy"] = (
             summary["total_dyn_mw"]
@@ -113,14 +124,25 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
             try:
                 area_encoder = area_map.loc[sel["n"], "rs_encoder_wrapper"]
                 area_syndrome = area_map.loc[sel["n"], "rs_syndrome"]
-                area_decoder = area_map.loc[sel["n"], "rs_decoder_plus_syndrome"]
+                area_decoder = area_map.loc[sel["n"], DECODER_TOP]
             except KeyError:
                 continue
 
-            clk_ns = clk_map.loc[sel["n"], "rs_decoder_plus_syndrome"]
+            clk_ns = clk_map.loc[sel["n"], DECODER_TOP]
             area_total_um2 = area_encoder + area_syndrome + area_decoder
             area_total_mm2 = area_total_um2 / 1e6
-            throughput_gbps = sel["rate"] * M / (CYCLES_PER_SYMBOL * clk_ns * 1e-9) / 1e9
+
+            if "m" in sel and not pd.isna(sel["m"]):
+                symbol_bits = int(sel["m"])
+            else:
+                gf_widths = summary.loc[summary["N"] == sel["n"], "GF_WIDTH"]
+                if gf_widths.empty:
+                    continue
+                symbol_bits = int(gf_widths.iloc[0])
+
+            throughput_gbps = (
+                sel["rate"] * symbol_bits / (CYCLES_PER_SYMBOL * clk_ns * 1e-9) / 1e9
+            )
             if throughput_gbps == 0:
                 continue
             area_per_gbps = area_total_mm2 / throughput_gbps
@@ -182,7 +204,7 @@ def plot_area_vs_ber(df: pd.DataFrame, targets: list[float]) -> None:
         nan_top = nan_data["area_per_gbps"].max() * 1.05
         if nan_top == 0:
             nan_top = 0.1
-        ax_left.set_ylim(0, max(nan_top, 0.1))
+        ax_left.set_ylim(0, max(nan_top, 0.015))
     ax_left.set_xlabel("Input pre-FEC BER")
     ax_left.set_ylabel("NanGate45 area per throughput (mm²/Gbps)")
 
@@ -212,7 +234,7 @@ def plot_area_vs_ber(df: pd.DataFrame, targets: list[float]) -> None:
         asap_top = asap_data["area_per_gbps"].max() * 1.05
         if asap_top == 0:
             asap_top = 0.01
-        ax_right.set_ylim(0, max(asap_top, 0.01))
+        ax_right.set_ylim(0, max(asap_top, 0.0015))
 
     title_targets = ", ".join(f"{ber:.0e}" for ber in bers_sorted)
     fig.suptitle(f"FEC Area per Throughput vs Raw BER (Targets {title_targets})")
@@ -230,7 +252,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Plot area-per-throughput vs BER")
     parser.add_argument("--selection", type=Path, help="precomputed sweep CSV; skip generation if provided")
     parser.add_argument("--save-selection", type=Path, help="optional path to save generated sweep data")
-    parser.add_argument("--k", type=int, default=512, help="data symbols K when generating sweep")
+    parser.add_argument("--k", type=int, help="force a specific data-symbol count K when generating sweep data")
     parser.add_argument("--min-exp", type=float, default=-30.0, help="minimum BER exponent (e.g., -30 for 1e-30)")
     parser.add_argument("--max-exp", type=float, default=-3.0, help="maximum BER exponent (e.g., -3 for 1e-3)")
     parser.add_argument("--step", type=float, default=0.5, help="log-scale step size in decades")

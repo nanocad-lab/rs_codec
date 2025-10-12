@@ -3,14 +3,14 @@
 Plot RS-FEC tradeoffs: pJ/bit vs input BER, and code rate vs input BER.
 
 Inputs
-- rsfec_selection CSV (e.g., `rsfec_selection_m8_halfdec.csv`)
+- rsfec_selection CSV (e.g., `rsfec_selection_m8_n86.csv`)
   - Must contain columns: `target_post_BER,input_preFEC_BER,n,k,m,t,rate,post_ber_est`.
-- synthesis summary CSV (e.g., `data/asap7_sweep_512/summary.csv`)
+- synthesis summary CSV (e.g., `paperdata/asap7_code_sweep/summary.csv`)
   - Must contain columns: `label,top,N,K,GF_WIDTH,CLK_NS,area,wns,total_dyn_mw`.
 
 Assumptions
-- GF_WIDTH=m=8 (matches the selection file).
-- Use decoder energy for pJ/bit: `top == 'rs_decoder_plus_syndrome'`.
+- GF width is taken from the selection file (expect `m=8`).
+- Use decoder energy for pJ/bit: `top == 'rs_decoder'`.
 - Throughput model (from the referenced paper):
   - Streaming decoder that processes one symbol every `DEC_CYCLES_PER_SYMBOL` clocks.
   - For the half-decoder configuration, `DEC_CYCLES_PER_SYMBOL = 2`.
@@ -27,9 +27,9 @@ Outputs
 
 Usage
   python scripts/plot_rs_codec_vs_ber.py \
-    --selection rsfec_selection_m8_halfdec.csv \
-    --summary data/asap7_sweep_512/summary.csv \
-    [--top rs_decoder_plus_syndrome] [--cycles-per-symbol 2] [--outdir plots]
+    --selection rsfec_selection_m8_n86.csv \
+    --summary paperdata/asap7_code_sweep/summary.csv \
+    [--top rs_decoder] [--cycles-per-symbol 2] [--outdir plots]
 """
 
 import argparse
@@ -40,15 +40,18 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
+TOP_CHOICES = ["rs_decoder", "rs_encoder_wrapper", "rs_syndrome"]
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Plot pJ/bit and code rate vs input BER for RS-FEC selections.")
-    p.add_argument("--selection", type=Path, default=Path("rsfec_selection_m8_halfdec.csv"),
+    p.add_argument("--selection", type=Path, default=Path("rsfec_selection_m8_n86.csv"),
                    help="Path to selection CSV produced by rsfec_select_and_cfg.py")
-    p.add_argument("--summary", type=Path, default=Path("data/asap7_sweep_512/summary.csv"),
+    p.add_argument("--summary", type=Path, default=Path("paperdata/asap7_code_sweep/summary.csv"),
                    help="Path to synthesis summary CSV with power and clock info")
     # Non-gated mode: choose a single top and its cycles-per-symbol
-    p.add_argument("--top", type=str, default="rs_decoder_plus_syndrome",
-                   choices=["rs_decoder_plus_syndrome", "rs_encoder_wrapper", "rs_syndrome"],
+    p.add_argument("--top", type=str, default="rs_decoder",
+                   choices=TOP_CHOICES,
                    help="Top block for non-gated pJ/bit computation")
     p.add_argument("--cycles-per-symbol", type=float, default=2.0,
                    help="Cycles per processed symbol for --top (2.0 for half-decoder)")
@@ -56,10 +59,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--gated", action="store_true",
                    help="Enable decoder clock gating model: E = E_syndrome + P_correctable * (E_decoder - E_syndrome)")
     p.add_argument("--syndrome-top", type=str, default="rs_syndrome",
-                   choices=["rs_decoder_plus_syndrome", "rs_encoder_wrapper", "rs_syndrome"],
+                   choices=TOP_CHOICES,
                    help="Top name for syndrome-only energy when --gated")
-    p.add_argument("--decoder-top", type=str, default="rs_decoder_plus_syndrome",
-                   choices=["rs_decoder_plus_syndrome", "rs_encoder_wrapper", "rs_syndrome"],
+    p.add_argument("--decoder-top", type=str, default="rs_decoder",
+                   choices=TOP_CHOICES,
                    help="Top name for decoder energy when --gated")
     p.add_argument("--syndrome-cycles-per-symbol", type=float, default=1.0,
                    help="Cycles per symbol for the syndrome block when --gated")
@@ -67,7 +70,7 @@ def parse_args() -> argparse.Namespace:
                    help="Cycles per symbol for the decoder block when --gated (2.0 for half-decoder)")
     # Encoder contribution
     p.add_argument("--encoder-top", type=str, default="rs_encoder_wrapper",
-                   choices=["rs_decoder_plus_syndrome", "rs_encoder_wrapper", "rs_syndrome"],
+                   choices=TOP_CHOICES,
                    help="Top name for encoder energy contribution")
     p.add_argument("--encoder-cycles-per-symbol", type=float, default=1.0,
                    help="Cycles per symbol for the encoder (typically 1.0)")
@@ -113,6 +116,14 @@ def merge_selection_power_single(selection: pd.DataFrame, summary: pd.DataFrame,
         "total_dyn_mw": f"{prefix}total_dyn_mw",
     })
     merged = sel.merge(summ, on=["N", "K"], how="left")
+    mask_no_fec = merged["t"] == 0
+    if mask_no_fec.any():
+        clk_col = f"{prefix}CLK_NS"
+        pwr_col = f"{prefix}total_dyn_mw"
+        gf_col = f"{prefix}GF_WIDTH"
+        merged.loc[mask_no_fec, gf_col] = merged.loc[mask_no_fec, "m"].astype(float)
+        merged.loc[mask_no_fec, clk_col] = merged.loc[mask_no_fec, clk_col].fillna(1.0)
+        merged.loc[mask_no_fec, pwr_col] = 0.0
     # Sanity: GF width vs m
     gf_col = f"{prefix}GF_WIDTH"
     mism = merged[(~merged[gf_col].isna()) & (merged[gf_col] != merged["m"])][["N", "K", gf_col, "m"]]
@@ -210,7 +221,7 @@ def plot_rate_vs_ber(df: pd.DataFrame, outpath: Path, style: str) -> None:
     ax.set_xlabel("Input pre-FEC BER")
     ax.set_ylabel("Code rate (k/n)")
     ax.set_title("RS Code Rate vs Input BER")
-    ax.set_ylim(0.85, 1.01)
+    ax.set_ylim(0.43, 1.01)
     ax.grid(True, which="both", linestyle=":", linewidth=0.5)
     ax.legend(title="Target post-FEC BER")
     plt.tight_layout()

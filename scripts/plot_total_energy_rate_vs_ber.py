@@ -19,10 +19,10 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
 SUMMARY_TECHS = ("ASAP7", "NanGate45")
-SUMMARY_ROOT_CANDIDATES = (ROOT / "newdata",)
+SUMMARY_ROOT_CANDIDATES = (ROOT / "paperdata", ROOT / "newdata")
 
-GF_SYMBOL_WIDTH = 8
 DECODER_CYCLES = 2.0  # decoder uses two cycles per symbol
+DECODER_TOP = "rs_decoder"
 
 
 EnergyRow = TypedDict(
@@ -36,6 +36,7 @@ EnergyRow = TypedDict(
         "rate": float,
         "energy": float,
         "p_correctable": float,
+        "m_bits": int,
     },
 )
 
@@ -44,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Plot total energy and rate vs BER")
     parser.add_argument("--selection", type=Path, help="precomputed sweep CSV; skip generation if provided")
     parser.add_argument("--save-selection", type=Path, help="optional path to save generated sweep data")
-    parser.add_argument("--k", type=int, default=512, help="data symbols K when generating sweep")
+    parser.add_argument("--k", type=int, help="force a specific data-symbol count K when generating a sweep")
     parser.add_argument("--min-exp", type=float, default=-30.0, help="minimum BER exponent (e.g., -30 for 1e-30)")
     parser.add_argument("--max-exp", type=float, default=-3.0, help="maximum BER exponent (e.g., -3 for 1e-3)")
     parser.add_argument("--step", type=float, default=0.5, help="log-scale step size in decades")
@@ -84,18 +85,32 @@ def load_or_generate_selection(
     if df.empty:
         raise ValueError("No sweep entries match the provided filters/targets")
 
+    df.sort_values(["target_post_BER", "input_preFEC_BER"], inplace=True)
+
     return df, target_list
 
 
 def match_target_ber(value: float, targets: Iterable[float]) -> Optional[float]:
+    if value <= 0.0:
+        return None
+
+    log_value = math.log10(value)
+    best_target: Optional[float] = None
+    best_distance: Optional[float] = None
+
     for target in targets:
-        if math.isclose(value, target, rel_tol=1e-2, abs_tol=0.0):
-            return float(target)
-    return None
+        if target <= 0.0:
+            continue
+        distance = abs(math.log10(target) - log_value)
+        if best_distance is None or distance < best_distance:
+            best_distance = distance
+            best_target = float(target)
+
+    return best_target
 
 
 def find_summary_path(tech: str) -> Path:
-    tech_dir = f"{tech.lower()}_opt_sweep"
+    tech_dir = f"{tech.lower()}_code_sweep"
     for base in SUMMARY_ROOT_CANDIDATES:
         candidate = base / tech_dir / "summary.csv"
         if candidate.exists():
@@ -103,10 +118,10 @@ def find_summary_path(tech: str) -> Path:
     raise FileNotFoundError(f"summary.csv for {tech} not found in expected directories")
 
 
-def p_correctable(n: int, t: int, p_b: float) -> float:
+def p_correctable(n: int, t: int, p_b: float, m_bits: int) -> float:
     if t <= 0:
         return 0.0
-    p_s = 1.0 - (1.0 - p_b) ** GF_SYMBOL_WIDTH
+    p_s = 1.0 - (1.0 - p_b) ** m_bits
     if p_s <= 0.0:
         return 0.0
     if p_s >= 1.0:
@@ -122,12 +137,21 @@ def p_correctable(n: int, t: int, p_b: float) -> float:
 
 
 def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
+    selection = (
+        selection.sort_values(
+            ["target_post_BER", "input_preFEC_BER", "t"],
+            ascending=[True, False, True],
+        )
+        .drop_duplicates(subset=["target_post_BER", "input_preFEC_BER"], keep="first")
+        .reset_index(drop=True)
+    )
+
     rows: List[EnergyRow] = []
     for tech in SUMMARY_TECHS:
         summary_path = find_summary_path(tech)
         summary = pd.read_csv(summary_path)
         summary["cycles"] = summary["top"].map(
-            lambda top: DECODER_CYCLES if top == "rs_decoder_plus_syndrome" else 1.0
+            lambda top: DECODER_CYCLES if top == DECODER_TOP else 1.0
         )
         summary["energy_pj_per_bit"] = (
             summary["total_dyn_mw"]
@@ -139,22 +163,34 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
 
         for _, sel_row in selection.iterrows():
             n = int(sel_row["n"])
-            if n not in energy_map.index:
+            t = int(sel_row.get("t", 0))
+
+            if t != 0 and n not in energy_map.index:
                 continue
 
-            try:
-                enc_energy = energy_map.loc[n, "rs_encoder_wrapper"]
-                syn_energy = energy_map.loc[n, "rs_syndrome"]
-                dec_energy = energy_map.loc[n, "rs_decoder_plus_syndrome"]
-            except KeyError:
-                continue
+            if t == 0:
+                enc_energy = syn_energy = dec_energy = 0.0
+            else:
+                try:
+                    enc_energy = energy_map.loc[n, "rs_encoder_wrapper"]
+                    syn_energy = energy_map.loc[n, "rs_syndrome"]
+                    dec_energy = energy_map.loc[n, DECODER_TOP]
+                except KeyError:
+                    continue
 
-            t = int(sel_row["t"])
             p_in = float(sel_row["input_preFEC_BER"])
             rate = float(sel_row["rate"])
             target = float(sel_row["target_post_BER"])
 
-            p_corr = p_correctable(n, t, p_in)
+            if "m" in sel_row and not pd.isna(sel_row["m"]):
+                symbol_bits = int(sel_row["m"])
+            else:
+                gf_widths = summary.loc[summary["N"] == n, "GF_WIDTH"]
+                if gf_widths.empty:
+                    continue
+                symbol_bits = int(gf_widths.iloc[0])
+
+            p_corr = p_correctable(n, t, p_in, symbol_bits)
             total_energy = enc_energy + syn_energy + p_corr * (dec_energy - syn_energy)
 
             rows.append(
@@ -167,13 +203,17 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
                     "rate": rate,
                     "energy": total_energy,
                     "p_correctable": p_corr,
+                    "m_bits": symbol_bits,
                 }
             )
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = df[df["input_preFEC_BER"] > 0].reset_index(drop=True)
+    return df
 
 
-def plot_outputs(df: pd.DataFrame, targets: list[float], k: int) -> None:
+def plot_outputs(df: pd.DataFrame, targets: list[float], k: Optional[int]) -> None:
     out_dir = ROOT / "plots"
     out_dir.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_dir / "total_energy_rate_vs_ber.csv", index=False)
@@ -183,11 +223,24 @@ def plot_outputs(df: pd.DataFrame, targets: list[float], k: int) -> None:
         data = df[df["tech"] == tech]
         if data.empty:
             continue
-        data.to_csv(out_dir / f"{tech.lower()}_total_energy_rate_vs_ber.csv", index=False)
+        data_sorted = data.sort_values(["BER Target", "input_preFEC_BER"], ascending=[True, False])
+        data_sorted.to_csv(out_dir / f"{tech.lower()}_total_energy_rate_vs_ber.csv", index=False)
+
+        symbol_bits = int(data_sorted["m_bits"].iloc[0]) if "m_bits" in data_sorted and not data_sorted["m_bits"].isna().all() else 0
+        k_label = f"k={k}" if k is not None else "best-k"
+
+        plot_data = data_sorted[data_sorted["input_preFEC_BER"] > 0].copy()
+        if plot_data.empty:
+            continue
 
         plt.figure(figsize=(8, 5))
+        positive_ber = plot_data["input_preFEC_BER"]
+        x_min = positive_ber.min()
+        x_max = positive_ber.max()
+        x_right = min(0.5, x_max * 1.1)
+
         sns.lineplot(
-            data=data,
+            data=plot_data,
             x="input_preFEC_BER",
             y="energy",
             hue="BER Target",
@@ -195,17 +248,22 @@ def plot_outputs(df: pd.DataFrame, targets: list[float], k: int) -> None:
             marker="o",
         )
         plt.xscale("log")
+        plt.xlim(x_min, x_right)
         plt.xlabel("Input Pre-FEC BER")
         plt.ylabel("Total energy per bit (pJ/bit)")
         targets_str = ", ".join(f"{t:.0e}" for t in targets)
-        plt.title(f"{tech} RS(m=8,k={k}) Energy/bit vs Input BER (targets: {targets_str})")
+        if symbol_bits > 0:
+            title_prefix = f"{tech} RS(m={symbol_bits}, {k_label})"
+        else:
+            title_prefix = f"{tech} RS({k_label})"
+        plt.title(f"{title_prefix} Energy/bit vs Input BER (targets: {targets_str})")
         plt.tight_layout()
         plt.savefig(out_dir / f"{tech.lower()}_energy_vs_ber.png", dpi=200)
         plt.close()
 
         plt.figure(figsize=(8, 5))
         sns.lineplot(
-            data=data,
+            data=plot_data,
             x="input_preFEC_BER",
             y="rate",
             hue="BER Target",
@@ -213,6 +271,7 @@ def plot_outputs(df: pd.DataFrame, targets: list[float], k: int) -> None:
             marker="o",
         )
         plt.xscale("log")
+        plt.xlim(x_min, x_right)
         plt.xlabel("Input Pre-FEC BER")
         plt.ylabel("Code rate (k/n)")
         plt.title(f"{tech} RS(m=8,k={k}) Rate vs Input BER (targets: {targets_str})")

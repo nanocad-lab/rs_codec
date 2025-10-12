@@ -16,13 +16,15 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
 SUMMARY_TECHS = ("ASAP7", "NanGate45")
-DEFAULT_SUMMARY_ROOTS = (ROOT / "newdata",)
+DEFAULT_SUMMARY_ROOTS = (ROOT / "paperdata", ROOT / "newdata")
 
 # Decoder consumes two cycles per symbol; encoder/syndrome consume one.
+DECODER_TOP = "rs_decoder"
+TOP_ORDER = ["rs_encoder_wrapper", "rs_syndrome", DECODER_TOP]
 CYCLES_PER_TOP = {
     "rs_encoder_wrapper": 1.0,
     "rs_syndrome": 1.0,
-    "rs_decoder_plus_syndrome": 2.0,
+    DECODER_TOP: 2.0,
 }
 
 
@@ -32,7 +34,7 @@ def parse_args() -> argparse.Namespace:
         "--summary-root",
         action="append",
         type=Path,
-        help="Root directory containing <tech>_opt_sweep/summary.csv (default: newdata/, data/)",
+        help="Root directory containing <tech>_code_sweep/summary.csv (default: paperdata/, newdata/)",
     )
     parser.add_argument(
         "--n",
@@ -51,7 +53,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def find_summary_path(tech: str, roots: Iterable[Path]) -> Path:
-    tech_dir = f"{tech.lower()}_opt_sweep"
+    tech_dir = f"{tech.lower()}_code_sweep"
     for root in roots:
         path = root / tech_dir / "summary.csv"
         if path.exists():
@@ -78,12 +80,12 @@ def compute_energy_table(summary_path: Path) -> pd.DataFrame:
     energy = (
         summary.groupby(["top", "N"])["energy_pj_per_bit"].min().unstack("top")
     )
-    required = {"rs_encoder_wrapper", "rs_syndrome", "rs_decoder_plus_syndrome"}
+    required = set(TOP_ORDER)
     missing = required - set(energy.columns)
     if missing:
         raise ValueError(f"Summary at {summary_path} missing energy for: {', '.join(sorted(missing))}")
 
-    energy = energy[list(required)]
+    energy = energy[TOP_ORDER]
     total = energy.sum(axis=1)
     energy = energy.reset_index()
     energy["total_energy"] = total.values

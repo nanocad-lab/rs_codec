@@ -4,7 +4,9 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -13,7 +15,9 @@ import seaborn as sns
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-BER_TARGETS = (1e-20, 1e-30)
+BER_TARGETS = (1e-12, 1e-15, 1e-20, 1e-25, 1e-30)
+LOG_BER_MARGIN = 1e-3
+LOG_MIN_VALUE = 1e-300
 
 
 @dataclass(frozen=True)
@@ -73,17 +77,81 @@ def load_links(path: Path) -> pd.DataFrame:
     return df
 
 
+def rows_matching_log_ber(df: pd.DataFrame, column: str, target: float) -> pd.DataFrame:
+    if column not in df.columns or target <= 0.0:
+        return df.iloc[0:0]
+
+    series = df[column].astype(float)
+    positive = series > 0.0
+    if not positive.any():
+        return df.iloc[0:0]
+
+    log_target = math.log10(target)
+    log_values = series[positive].map(lambda value: math.log10(value))
+    distances = (log_values - log_target).abs()
+    min_distance = distances.min()
+    tolerance = 1e-12
+    matching_idx = distances[distances <= min_distance + tolerance].index
+    return df.loc[matching_idx]
+
+
+def log_ber_distance(a: float, b: float) -> float:
+    if a <= 0.0 or b <= 0.0:
+        return float("inf")
+    return abs(math.log10(a) - math.log10(b))
+
+
+def lookup_fec_area_per_gbps(
+    area_df: Optional[pd.DataFrame],
+    tech: str,
+    target_ber: float,
+    input_ber: float,
+) -> float:
+    if area_df is None or area_df.empty:
+        return float("nan")
+
+    data = area_df[area_df["tech"] == tech]
+    if data.empty:
+        return float("nan")
+
+    target_rows = rows_matching_log_ber(data, "target_post_BER", target_ber)
+    if not target_rows.empty:
+        data = target_rows
+
+    if "input_preFEC_BER" not in data.columns or "area_per_gbps" not in data.columns:
+        return float("nan")
+
+    series = data["input_preFEC_BER"].astype(float)
+    positive = series > 0.0
+    if not positive.any():
+        return float("nan")
+
+    log_input = math.log10(max(input_ber, LOG_MIN_VALUE))
+    log_values = series[positive].map(lambda value: math.log10(value))
+    distances = (log_values - log_input).abs()
+    idx = distances.idxmin()
+    return float(data.loc[idx, "area_per_gbps"])
+
+
 def closest_row_by_ber(df: pd.DataFrame, target_ber: float) -> pd.Series:
     ber_col = "plot_ber" if "plot_ber" in df.columns else "input_preFEC_BER"
     ber_values = df[ber_col].astype(float)
     meets_target = ber_values >= target_ber
 
     if meets_target.any():
-        idx = ber_values[meets_target].idxmin()
-    else:
-        idx = ber_values.idxmax()
+        subset = df.loc[meets_target]
+        if "t" in subset.columns:
+            subset = subset.sort_values(["t", ber_col], ascending=[True, True])
+        else:
+            subset = subset.sort_values(ber_col, ascending=True)
+        return subset.iloc[0]
 
-    return df.loc[idx]
+    subset = df
+    if "t" in subset.columns:
+        subset = subset.sort_values(["t", ber_col], ascending=[False, False])
+    else:
+        subset = subset.sort_values(ber_col, ascending=False)
+    return subset.iloc[0]
 
 
 def compute_metrics() -> pd.DataFrame:
@@ -92,6 +160,15 @@ def compute_metrics() -> pd.DataFrame:
         name: pd.read_csv(ROOT / "plots" / f"{name.lower()}_total_energy_rate_vs_ber.csv")
         for name in BASE_DATASET_NODES
     }
+
+    area_path = ROOT / "plots" / "area_per_gbps_vs_ber.csv"
+    if area_path.exists():
+        area_df: Optional[pd.DataFrame] = pd.read_csv(area_path)
+        for col in ["target_post_BER", "input_preFEC_BER", "area_per_gbps"]:
+            if col in area_df.columns:
+                area_df[col] = area_df[col].astype(float)
+    else:
+        area_df = None
 
     rows = []
     for _, link in links.iterrows():
@@ -124,18 +201,31 @@ def compute_metrics() -> pd.DataFrame:
             code_rate = 1.0
             fec_energy = 0.0
             fec_energy_scaled = 0.0
+            fec_area_per_gbps = lookup_fec_area_per_gbps(area_df, dataset, target_ber, link_ber)
 
-            if link_ber > target_ber:
+            if link_ber > target_ber and log_ber_distance(link_ber, target_ber) > LOG_BER_MARGIN:
                 target_df = fec_df
                 if "BER Target" in fec_df.columns:
-                    target_rows = fec_df[np.isclose(fec_df["BER Target"], target_ber, rtol=0.0, atol=1e-40)]
+                    target_rows = rows_matching_log_ber(fec_df, "BER Target", target_ber)
                     if not target_rows.empty:
                         target_df = target_rows
 
                 fec_row = closest_row_by_ber(target_df, link_ber)
-                code_rate = float(fec_row["rate"])
-                fec_energy = float(fec_row["energy"])
-                fec_energy_scaled = fec_energy * (energy_factor_target / energy_factor_base)
+                if "t" in fec_row and not pd.isna(fec_row["t"]) and int(fec_row["t"]) == 0:
+                    code_rate = 1.0
+                    fec_energy = 0.0
+                    fec_energy_scaled = 0.0
+                else:
+                    code_rate = float(fec_row["rate"])
+                    fec_energy = float(fec_row["energy"])
+                    fec_energy_scaled = fec_energy * (energy_factor_target / energy_factor_base)
+
+                fec_area_per_gbps = lookup_fec_area_per_gbps(
+                    area_df,
+                    dataset,
+                    target_ber,
+                    float(fec_row.get("input_preFEC_BER", link_ber)),
+                )
 
             fom_raw = gbps_per_mm / link_energy
             numerator = gbps_per_mm * code_rate
@@ -163,6 +253,7 @@ def compute_metrics() -> pd.DataFrame:
                     "Energy_factor_base": energy_factor_base,
                     "Energy_factor_target": energy_factor_target,
                     "Energy_scaling_source": scaling_source,
+                    "FEC_area_per_gbps_scaled": fec_area_per_gbps,
                 }
             )
 
@@ -180,7 +271,13 @@ def write_outputs(df: pd.DataFrame) -> None:
     colors = sns.color_palette("tab10", len(ordered_names))
     name_to_color = dict(zip(ordered_names, colors))
 
-    target_markers = {1e-20: "+", 1e-30: "^"}
+    target_markers = {
+        1e-12: "x",
+        1e-15: "+",
+        1e-20: "s",
+        1e-25: "d",
+        1e-30: "^",
+    }
 
     for name in ordered_names:
         group = df_sorted[df_sorted["Name"] == name]
@@ -191,7 +288,7 @@ def write_outputs(df: pd.DataFrame) -> None:
         reach = group.iloc[0]["Reach_mm"]
         fom_raw = group.iloc[0]["FoM_raw"]
 
-        ax.scatter(reach, fom_raw, marker="x", color=color, s=45)
+        ax.scatter(reach, fom_raw, marker="1", color=color, s=55)
         ax.annotate(
             name,
             (reach, fom_raw),
@@ -214,15 +311,17 @@ def write_outputs(df: pd.DataFrame) -> None:
     ax.set_yscale("log")
     ax.set_xlabel("Reach (mm)")
     ax.set_ylabel("FoM (Gbps/mm)/(pJ/bit)")
-    ax.set_title("Reach vs FoM (Raw vs FEC @ 1e-15 & 1e-30)")
+    formatted_targets = ", ".join(f"{t:.0e}" for t in BER_TARGETS)
+    ax.set_title(f"Reach vs FoM (Raw vs FEC @ {formatted_targets})")
     ax.grid(True, which="both", linestyle="--", linewidth=0.6)
 
     from matplotlib.lines import Line2D
 
     legend_handles = [
-        Line2D([0], [0], marker="x", color="black", markerfacecolor="black", markersize=6, linestyle="None", label="Raw FoM")
+        Line2D([0], [0], marker="1", color="black", markerfacecolor="black", markersize=6, linestyle="None", label="Raw FoM")
     ]
-    for target_ber, marker in target_markers.items():
+    for target_ber in BER_TARGETS:
+        marker = target_markers[target_ber]
         legend_handles.append(
             Line2D(
                 [0],

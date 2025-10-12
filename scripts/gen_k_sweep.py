@@ -7,36 +7,14 @@ import argparse
 import importlib.util
 import math
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Protocol, Sequence, TypedDict, cast
+from typing import Iterable, List, Optional, Protocol, Sequence, TypedDict, cast
 
+import numpy as np
 import pandas as pd
 
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-
-
-def _frange(start: float, stop: float, step: float) -> List[float]:
-    if step == 0.0:
-        raise ValueError("step must be non-zero")
-
-    values: List[float] = []
-    current = start
-    comparator: Callable[[float, float], bool]
-    comparator = (lambda a, b: a > b) if step < 0 else (lambda a, b: a < b)
-    while comparator(current, stop):
-        values.append(current)
-        current += step
-
-    if values:
-        last = values[-1]
-        if (step < 0 and last > stop) or (step > 0 and last < stop):
-            if not math.isclose(last, stop):
-                values.append(stop)
-    else:
-        values.append(start)
-    return values
-
 
 class SelectionResult(TypedDict):
     n: int
@@ -51,6 +29,9 @@ class SelectorModule(Protocol):
     targets: Sequence[float]
 
     def minimal_n_for_target(self, p_b: float, target: float, k: int) -> Optional[SelectionResult]:
+        ...
+
+    def choose_best_over_k(self, p_b: float, target: float) -> Optional[SelectionResult]:
         ...
 
 
@@ -75,7 +56,7 @@ def _load_selector() -> SelectorModule:
 
 def generate_sweep(
     *,
-    k: int,
+    k: Optional[int] = None,
     exp_start: float = -3.0,
     exp_stop: float = -30.0,
     exp_step: float = -0.5,
@@ -88,13 +69,17 @@ def generate_sweep(
     target_list = list(targets) if targets is not None else list(selector.targets)
 
     step = exp_step if (exp_stop - exp_start) * exp_step > 0 else -exp_step
-    exponents = _frange(exp_start, exp_stop, step)
+    stop_adjusted = exp_stop + step / 2.0
+    exponents = np.arange(exp_start, stop_adjusted, step)
     p_b_grid = [10.0 ** exp for exp in exponents]
 
     rows: List[SweepRow] = []
     for target in target_list:
         for p_b in p_b_grid:
-            sol = selector.minimal_n_for_target(float(p_b), float(target), k)
+            if k is None:
+                sol = selector.choose_best_over_k(float(p_b), float(target))
+            else:
+                sol = selector.minimal_n_for_target(float(p_b), float(target), k)
             if sol is None:
                 rows.append(
                     {
@@ -124,8 +109,8 @@ def generate_sweep(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate minimal N sweep for given K")
-    parser.add_argument("--k", type=int, default=512, help="data symbols K")
+    parser = argparse.ArgumentParser(description="Generate RS(n,k) sweep vs BER using rsfec_select_and_cfg settings")
+    parser.add_argument("--k", type=int, help="force a specific data-symbol count K (defaults to best K per target)")
     parser.add_argument("--min-exp", type=float, default=-30.0, help="smallest exponent (e.g., -30 for 1e-30)")
     parser.add_argument("--max-exp", type=float, default=-3.0, help="largest exponent (e.g., -3 for 1e-3)")
     parser.add_argument("--step", type=float, default=0.5, help="step size in decades")

@@ -8,7 +8,7 @@ Energy per information bit (pJ/bit) = total_dyn_mW * CLK_NS * cycles_per_symbol 
 Where:
 - rate = K / N
 - m = GF_WIDTH (bits per symbol)
-- cycles_per_symbol = 2 for 'rs_decoder_plus_syndrome' (half-decoder), else 1
+- cycles_per_symbol = 2 for 'rs_decoder' (half-decoder), else 1
 
 The input CSV must contain columns:
   label,top,N,K,GF_WIDTH,CLK_NS,area,wns,total_dyn_mw
@@ -20,6 +20,9 @@ import csv
 from pathlib import Path
 from typing import Dict, List, MutableMapping, Optional
 import sys
+
+
+DECODER_TOP = "rs_decoder"
 
 
 def _to_float(value: Optional[str]) -> Optional[float]:
@@ -48,7 +51,7 @@ def compute_pj_per_bit(row: MutableMapping[str, Optional[str]]) -> float:
         return float("nan")
 
     rate = k / n
-    cycles_per_symbol = 2.0 if top == "rs_decoder_plus_syndrome" else 1.0
+    cycles_per_symbol = 2.0 if top == DECODER_TOP else 1.0
     pj = p_mw * clk_ns * cycles_per_symbol / (rate * m)
     return pj
 
@@ -81,4 +84,3 @@ def main(path: Path) -> int:
 if __name__ == "__main__":
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/asap7_sweep_clock_gate/summary.csv")
     sys.exit(main(target))
-

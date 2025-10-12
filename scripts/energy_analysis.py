@@ -27,7 +27,7 @@ class SweepResult:
 BLOCK_INFO: dict[str, tuple[str, float]] = {
     "rs_encoder_wrapper": ("Encoder", 1.0),
     "rs_syndrome": ("Syndrome", 1.0),
-    "rs_decoder_plus_syndrome": ("Decoder", 1.0),
+    "rs_decoder": ("Decoder", 1.0),
 }
 
 
@@ -51,7 +51,7 @@ def _power_units_to_mw(value: float, unit: str) -> float:
 def _design_name(top: str, n: float, k: float) -> str:
     n_int = int(n)
     k_int = int(k)
-    if top == "rs_decoder_plus_syndrome":
+    if top == "rs_decoder":
         return f"rs_decoder_N{n_int}_K{k_int}"
     if top == "rs_encoder_wrapper":
         return f"rs_encoder_wrapper_N{n_int}_K{k_int}"
@@ -162,8 +162,14 @@ def load_sweep(summary_paths: list[Path], name: str) -> list[SweepResult]:
     if df.empty:
         raise ValueError(f"No recognised tops found in {name}")
 
-    # Normalise WNS to nanoseconds (reports mix ns and ps).
+    # Normalise WNS to nanoseconds (reports mix ns and ps) and drop timing failures.
+    df["wns"] = pd.to_numeric(df["wns"], errors="coerce")
     df["wns_ns"] = df["wns"].apply(lambda x: x / 1000.0 if x > 50.0 else x)
+
+    # Retain rows with non-negative slack or missing measurements.
+    timing_mask = df["wns_ns"].isna() | (df["wns_ns"] >= 0.0)
+    df = df[timing_mask].copy()
+
     df = _populate_power_columns(df)
 
     block_frames: dict[str, pd.DataFrame] = {}
@@ -275,8 +281,8 @@ def main() -> int:
     out_dir = base / "plots"
 
     sweeps = [
-        ([base / "newdata/asap7_energy_sweep/summary.csv"], "ASAP7"),
-        ([base / "newdata/nangate45_energy_sweep/summary.csv"], "Nangate45"),
+        ([base / "paperdata/asap7_freq_sweep/summary.csv"], "ASAP7"),
+        ([base / "paperdata/nangate45_freq_sweep/summary.csv"], "Nangate45"),
     ]
 
     results: list[SweepResult] = []
@@ -290,9 +296,9 @@ def main() -> int:
         df = result.data
         min_row = df.iloc[result.min_energy_idx]
         knee_row = df.iloc[result.knee_idx]
-        print(f"{result.name}: Min energy at {min_row['freq_mhz']:.2f} MHz (CLK {min_row['CLK_NS']:.2f} ns, WNS {min_row['wns_ns']:.3f} ns) "
+        print(f"{result.name}: Min energy at {min_row['freq_mhz']:.2f} MHz (CLK {min_row['CLK_NS']:.3f} ns, WNS {min_row['wns_ns']:.3f} ns) "
               f"-> {min_row['energy_pj_per_bit']:.3f} pJ/bit, power {min_row['power_mw']:.3f} mW")
-        print(f"{result.name}: Power knee near {knee_row['freq_mhz']:.2f} MHz (CLK {knee_row['CLK_NS']:.2f} ns, WNS {knee_row['wns_ns']:.3f} ns) "
+        print(f"{result.name}: Power knee near {knee_row['freq_mhz']:.2f} MHz (CLK {knee_row['CLK_NS']:.3f} ns, WNS {knee_row['wns_ns']:.3f} ns) "
               f"-> power {knee_row['power_mw']:.3f} mW, energy {knee_row['energy_pj_per_bit']:.3f} pJ/bit")
         print()
 
