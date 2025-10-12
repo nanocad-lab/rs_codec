@@ -1,47 +1,33 @@
 #!/usr/bin/env python3
-"""RS-FEC selector and synthesis-config generator (m=8, k power-of-two)."""
+"""RS-FEC selector and synthesis-config generator (n=86 over GF(2^8))."""
 
 from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, TypedDict, cast
+from typing import Any, Dict, List, Optional, TypedDict
 
 import pandas as pd
 
 # ---------- Parameters ----------
 m = 8
-targets = [1e-12, 1e-15, 1e-30]
+n_fixed = 86
 
+# Input/output BER design points (override as needed)
+worst_input_preFEC_BER = 1e-3
+worst_target_post_BER = 1e-30
 
-def _frange(start: float, stop: float, step: float) -> List[float]:
-    """Return values analogous to numpy.arange but using pure Python."""
+# Targets to characterize; selection CSV will include thresholds for each
+targets = [1e-12, 1e-15, 1e-20, 1e-25, 1e-30]
 
-    if step == 0.0:
-        raise ValueError("step must be non-zero")
+# Binary-search termination: stop when upper/lower differ by <= this many decades
+LOG_BER_TOL = 1e-3
+LOG_MIN_VALUE = 1e-300
 
-    values: List[float] = []
-    current = start
-    comparator: Callable[[float, float], bool]
-    comparator = (lambda a, b: a > b) if step < 0 else (lambda a, b: a < b)
-    while comparator(current, stop):
-        values.append(current)
-        current += step
-
-    if values:
-        last = values[-1]
-        if (step < 0 and last > stop) or (step > 0 and last < stop):
-            if not math.isclose(last, stop):
-                values.append(stop)
-    else:
-        values.append(start)
-    return values
-
-
-exponents = _frange(-4.0, -15.0, -0.5)  # -4, -4.5, ..., -15
-ei_grid = [10.0 ** exp for exp in exponents]
-k_candidates = [16, 128, 512]
-n_min, n_max = 0, 1024
+# Search K values from highest-rate (t = 1) downward in odd steps.
+k_max = n_fixed - 2
+k_min = 2  # minimum data symbols to explore (adjust as needed)
+k_candidates = [k for k in range(k_max, k_min - 1, -2)]
 
 # Synthesis-config formatting
 LIB = "/w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT"
@@ -86,71 +72,196 @@ def rs_post_ber(p_b: float, n: int, k: int, m: int) -> float:
         ber += 0.5 * (i / n) * pmf
     return ber
 
-def minimal_n_for_target(p_b: float, target: float, k: int) -> Optional[SelectionResult]:
-    """Return minimal-n solution for this k that meets target (if any)."""
-    n_start = max(k + 2, n_min)
-    if (n_start - k) % 2 == 1:
-        n_start += 1
-    for n in range(n_start, n_max + 1, 2):
-        post = rs_post_ber(p_b, n, k, m)
+def best_k_for_target(p_b: float, target: float) -> Optional[SelectionResult]:
+    """Return the highest-rate RS(n_fixed,k) that meets the target (if any)."""
+    for k in k_candidates:
+        post = rs_post_ber(p_b, n_fixed, k, m)
         if post <= target:
             return {
-                "n": n, "k": k, "m": m, "t": (n - k) // 2,
-                "rate": k / n, "post_ber_est": post
+                "n": n_fixed,
+                "k": k,
+                "m": m,
+                "t": (n_fixed - k) // 2,
+                "rate": k / n_fixed,
+                "post_ber_est": post,
             }
     return None
 
-def choose_best_over_k(p_b: float, target: float) -> Optional[SelectionResult]:
-    """Pick highest rate across k; tie-break smaller n."""
-    cands: List[SelectionResult] = []
-    for k in k_candidates:
-        sol = minimal_n_for_target(p_b, target, k)
-        if sol:
-            cands.append(sol)
-    if not cands:
+
+def minimal_n_for_target(p_b: float, target: float, k: int) -> Optional[SelectionResult]:
+    """Compatibility helper for scripts that expect per-k evaluation."""
+    if (n_fixed - k) % 2 != 0 or k > n_fixed or k < k_min:
         return None
-    cands.sort(key=lambda d: (-d["rate"], d["n"]))
-    return cands[0]
+    post = rs_post_ber(p_b, n_fixed, k, m)
+    if post > target:
+        return None
+    return {
+        "n": n_fixed,
+        "k": k,
+        "m": m,
+        "t": (n_fixed - k) // 2,
+        "rate": k / n_fixed,
+        "post_ber_est": post,
+    }
+
+
+def choose_best_over_k(p_b: float, target: float) -> Optional[SelectionResult]:
+    return best_k_for_target(p_b, target)
+
+
+def max_input_ber_for_target(
+    n: int,
+    k: int,
+    m_bits: int,
+    target: float,
+    p_max: float,
+    *,
+    tol: float = 1e-6,
+    max_iter: int = 100,
+) -> tuple[float, float]:
+    """Return (p_b, post_ber) for the largest input BER meeting the target."""
+
+    if target <= 0.0:
+        return 0.0, 0.0
+
+    upper_limit = 0.5
+    lower = 0.0
+    post_lower = rs_post_ber(lower, n, k, m_bits)
+    if post_lower > target:
+        raise RuntimeError(
+            f"RS({n},{k}) cannot reach target {target} even at zero input BER"
+        )
+
+    upper = float(max(p_max, 1e-12))
+    post_upper = rs_post_ber(upper, n, k, m_bits)
+
+    if post_upper <= target:
+        while upper < upper_limit and post_upper <= target:
+            lower = upper
+            post_lower = post_upper
+            next_upper = upper * 2.0 if upper > 0.0 else 1e-12
+            if next_upper <= upper:
+                break
+            upper = min(upper_limit, next_upper)
+            post_upper = rs_post_ber(upper, n, k, m_bits)
+
+        if post_upper <= target:
+            return upper, min(post_upper, target)
+
+    best_p = lower
+    best_post = post_lower
+    for _ in range(max_iter):
+        mid = 0.5 * (lower + upper)
+        post = rs_post_ber(mid, n, k, m_bits)
+        if post <= target:
+            best_p = mid
+            best_post = post
+            lower = mid
+        else:
+            upper = mid
+
+        log_upper = math.log10(max(upper, LOG_MIN_VALUE))
+        log_lower = math.log10(max(lower, LOG_MIN_VALUE))
+        if abs(log_upper - log_lower) <= LOG_BER_TOL:
+            break
+
+    return best_p, min(best_post, target)
+
 
 def main() -> None:
+    if not targets:
+        raise ValueError("At least one target BER must be specified.")
+
+    worst_input = worst_input_preFEC_BER
     rows: List[Dict[str, Any]] = []
+
+    worst = best_k_for_target(worst_input, worst_target_post_BER)
+    if worst is None:
+        raise ValueError(
+            f"No RS({n_fixed},k) over GF(2^{m}) meets target {worst_target_post_BER} "
+            f"at input BER {worst_input:.2e}"
+        )
+
+    max_t = worst["t"]
+    t_values = list(range(1, max_t + 1))
+
     for target in targets:
-        for p_b in ei_grid:
-            best = choose_best_over_k(p_b, target)
-            row: Dict[str, Any] = {"target_post_BER": target, "input_preFEC_BER": p_b}
-            if best is None:
-                row.update({"n": None, "k": None, "m": m, "t": None, "rate": None,
-                            "post_ber_est": None, "note": "No RS(n,k) with m=8, n<=255 met the target"})
-            else:
-                row.update(cast(Mapping[str, Any], best))
-                row["note"] = ""
-            rows.append(row)
+        # Include a no-FEC option where post-BER equals pre-BER
+        rows.append(
+            {
+                "target_post_BER": target,
+                "input_preFEC_BER": float(target),
+                "n": n_fixed,
+                "k": n_fixed,
+                "m": m,
+                "t": 0,
+                "rate": 1.0,
+                "post_ber_est": float(target),
+                "note": "no_fec",
+            }
+        )
+
+        for t in t_values:
+            k = n_fixed - 2 * t
+            if k <= 0:
+                continue
+            p_max, post = max_input_ber_for_target(
+                n_fixed,
+                k,
+                m,
+                target,
+                worst_input,
+            )
+            rows.append(
+                {
+                    "target_post_BER": target,
+                    "input_preFEC_BER": p_max,
+                    "n": n_fixed,
+                    "k": k,
+                    "m": m,
+                    "t": t,
+                    "rate": k / n_fixed,
+                    "post_ber_est": post,
+                    "note": "",
+                }
+            )
 
     sel_df = pd.DataFrame(rows)
-    csv_path = Path("rsfec_selection_m8_halfdec.csv")
+    sel_df.sort_values(
+        ["target_post_BER", "input_preFEC_BER", "t"],
+        ascending=[True, False, True],
+        inplace=True,
+    )
+    csv_path = Path("rsfec_selection_m8_n86.csv")
     sel_df.to_csv(csv_path, index=False)
 
     # Build synthesis config of unique (n,k) found
-    uniq = sel_df.dropna(subset=["n","k"]).drop_duplicates(subset=["n","k","m"]).sort_values(["k","n"])
+    uniq = (
+        sel_df[sel_df["t"] > 0]
+        .dropna(subset=["n", "k"])
+        .drop_duplicates(subset=["n", "k", "m"])
+        .sort_values(["k", "n"])
+    )
     cfg_lines = []
-    cfg_lines.append("# RS Codec Synthesis Configs (ASAP7, from selection over specified input/targets)")
+    cfg_lines.append("# RS Codec Synthesis Configs")
     cfg_lines.append("# Format: N K GF_WIDTH clock_ps [library_dir] [top]")
-    cfg_lines.append("# Library: ASAP7 TT compiled DBs")
     cfg_lines.append("")
-    cfg_lines.append("# Targets: 1e-12, 1e-15, 1e-30; Inputs: 1e-4 down to 1e-15 in 0.5-decade steps")
-    cfg_lines.append(f"# set LIB {LIB}")
+    cfg_lines.append(
+        f"# Worst-case FEC analysed: {worst_input:.2e} -> {worst_target_post_BER:.2e}"
+    )
     cfg_lines.append("")
     for _, r in uniq.iterrows():
         n, k, t = int(r["n"]), int(r["k"]), int(r["t"])
-        cfg_lines.append(f"# RS({n},{k}), GF8 (t={t}), {clock_ps/1000:.1f} ns")
-        for top in ["rs_encoder_wrapper", "rs_syndrome", "rs_decoder_plus_syndrome"]:
+        cfg_lines.append(f"# RS({n},{k}), GF256 (t={t})")
+        for top in ["rs_encoder_wrapper", "rs_syndrome", "rs_decoder"]:
             cfg_lines.append(f"{n} {k} 8 {clock_ps} {LIB} {top}")
         cfg_lines.append("")
-    cfg_path = Path("rs_codec_synth_configs_from_selection_halfdec.cfg")
+    cfg_path = Path(f"config/sweep_code_n{n_fixed}.txt")
     cfg_path.write_text("\n".join(cfg_lines), encoding="utf-8")
 
     print(f"Wrote: {csv_path}")
     print(f"Wrote: {cfg_path}")
+
 
 if __name__ == "__main__":
     main()

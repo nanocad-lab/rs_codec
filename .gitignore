@@ -3,9 +3,10 @@ alib-52/*
 data/*
 olddata/*
 newdata/*
-!newdata/*/
-newdata/*/**
-!newdata/*/summary.csv
+paperdata/*
+!paperdata/*/
+paperdata/*/**
+!paperdata/*/summary.csv
 __pycache__/
 *.pyc
 command.log
