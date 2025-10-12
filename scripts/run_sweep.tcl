@@ -18,7 +18,7 @@
 #
 # Examples:
 #   15 11 4 2000.0 /path/to/asap7/.../LIB/CCS/TT             rs_encoder_wrapper
-#   15 11 4 8000.0 /path/to/NanGate45-Synopsys.../NanGate45/db rs_decoder_plus_syndrome
+#   15 11 4 8000.0 /path/to/NanGate45-Synopsys.../NanGate45/db rs_decoder
 #
 ############################################################
 
@@ -137,6 +137,33 @@ proc basename {path} {
 proc sanitize {s} {
   regsub -all {[^A-Za-z0-9_.-]} $s _ s2
   return $s2
+}
+
+proc build_run_label {n k gf_width clock_ps lib_dir top} {
+  set two_t  [expr {$n - $k}]
+  set clk_ns [expr {double($clock_ps) / 1000.0}]
+  set corner [basename $lib_dir]
+  if {$corner eq ""} { set corner "lib" }
+  return [format "N%02d_K%02d_GF%d_TT2T%03d_CLK%.3fns_%s_%s" \
+                 $n $k $gf_width $two_t $clk_ns [sanitize $corner] [sanitize $top]]
+}
+
+proc load_completed_labels {summary_path} {
+  set completed [dict create]
+  if {![file exists $summary_path]} {
+    return $completed
+  }
+  set fin [open $summary_path r]
+  while {[gets $fin line] >= 0} {
+    if {$line eq ""} { continue }
+    if {[string match {label,*} $line]} { continue }
+    set label [string trim [lindex [split $line ,] 0]]
+    if {$label ne ""} {
+      dict set completed $label 1
+    }
+  }
+  close $fin
+  return $completed
 }
 
 # Configure link/target libraries given a directory of compiled .db files (no .lib)
@@ -310,11 +337,7 @@ proc run_one_config {idx n k gf_width clock_ps lib_dir top} {
   set word_width  [expr {[gf_width_to_word_width_minus1 $gf_width] + 1}]
   set clk_ns      [expr {$clock_ps / 1000.0}]
 
-  set corner      [basename $lib_dir]
-  if {$corner eq ""} { set corner "lib" }
-
-  set label [format "N%02d_K%02d_GF%d_TT2T%03d_CLK%.3fns_%s_%s" \
-                 $n $k $gf_width $two_t $clk_ns [sanitize $corner] [sanitize $top]]
+  set label [build_run_label $n $k $gf_width $clock_ps $lib_dir $top]
 
   set run_root "$OUT_ROOT/$label"
 
@@ -353,7 +376,7 @@ proc run_one_config {idx n k gf_width clock_ps lib_dir top} {
           [generate_supporting_sources $gf_width $gen_dir $GEN_TYPES_TEMPLATE $WRAPPER_TEMPLATE] { break }
 
   # Determine elaboration top early (for source list selection)
-  set elab_top [map_top_alias $top]
+  set elab_top $top
 
   # Source list
   set vhdl_sources [get_vhdl_files $RTL_ROOT $generated_types $generated_wrapper $elab_top $generated_encoder $generated_decoder]
@@ -547,6 +570,7 @@ proc run_one_config {idx n k gf_width clock_ps lib_dir top} {
   if {$need_header} {
     puts $fout "label,top,N,K,GF_WIDTH,CLK_NS,area,wns,total_dyn_mw"
   }
+
   puts $fout [format "%s,%s,%d,%d,%d,%.6f,%s,%s,%s" \
                      $label $top $n $k $gf_width $clk_ns \
                      [expr {$area eq "" ? "NA" : $area}] \
@@ -555,19 +579,20 @@ proc run_one_config {idx n k gf_width clock_ps lib_dir top} {
   close $fout
 }
 
-# Map user-friendly top aliases to actual entities present in the RTL
-proc map_top_alias {top} {
-  switch -- $top \
-    rs_decoder_plus_syndrome { return rs_decoder } \
-    default { return $top }
-}
-
 # --------- Parse config file and run sweep ---------
 if {![file exists $CONFIG_FILE]} {
   puts "[format {ERROR: Config file not found: %s} $CONFIG_FILE]"
   exit 1
 }
 
+set completed_labels [dict create]
+if {[info exists ::SUMMARY_CACHE_FILES]} {
+  foreach cache_path $::SUMMARY_CACHE_FILES {
+    set completed_labels [dict merge $completed_labels [load_completed_labels $cache_path]]
+  }
+}
+set completed_labels [dict merge $completed_labels [load_completed_labels $SUMMARY_FILE]]
+set skipped_runs 0
 set fh [open $CONFIG_FILE r]
 set idx 0
 while {[gets $fh line] >= 0} {
@@ -599,17 +624,27 @@ while {[gets $fh line] >= 0} {
   if {[llength $toks] >= 6} { set TOP_ENTITY [lindex $toks 5] }
   if {$LIB_DIR eq "" && $DEFAULT_LIB_DIR ne ""} { set LIB_DIR $DEFAULT_LIB_DIR }
 
+  set label [build_run_label $N $K $GF_WIDTH $CLK_PS $LIB_DIR $TOP_ENTITY]
+  if {[dict exists $completed_labels $label]} {
+    incr skipped_runs
+    puts "[format {INFO: Skipping completed config: %s} $label]"
+    continue
+  }
+
   incr idx
-  catch {
-    run_one_config $idx $N $K $GF_WIDTH $CLK_PS $LIB_DIR $TOP_ENTITY
-  } err
-  if {[info exists err] && $err ne ""} {
+  set rc [catch { run_one_config $idx $N $K $GF_WIDTH $CLK_PS $LIB_DIR $TOP_ENTITY } err]
+  if {$rc != 0} {
     puts "[format {ERROR: Run %d failed: %s} $idx $err]"
+  } else {
+    dict set completed_labels $label 1
   }
 }
 close $fh
 
 puts "[format {INFO: Sweep complete. Outputs under: %s} $OUT_ROOT]"
+if {$skipped_runs > 0} {
+  puts "[format {INFO: Skipped %d previously completed configuration(s).} $skipped_runs]"
+}
 
 # If invoked by the parallel Python wrapper, close dc_shell so Popen can exit
 if {[info exists ::RUN_SWEEP_AUTO_EXIT] && $::RUN_SWEEP_AUTO_EXIT} {

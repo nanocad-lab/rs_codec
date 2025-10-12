@@ -24,7 +24,11 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence, TextIO
+from typing import Dict, Iterable, List, Optional, Sequence, TextIO, Tuple
+
+
+def sanitize(value: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in "_.-" else "_" for ch in value)
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -84,23 +88,65 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def iter_config_lines(path: Path) -> List[str]:
-    """Return runnable lines from a sweep configuration file.
+def parse_config_for_parallel(path: Path) -> tuple[list[str], list[str]]:
+    """Split a sweep config into assignments and runnable entries.
 
-    Mirrors the parsing in run_sweep.tcl: removes comments and blank lines,
-    requiring at least four whitespace-separated tokens per entry.
+    Preserves ``set VAR value`` lines (e.g., ``set LIB ...``) so each worker
+    inherits the same variable assignments before its partition of entries.
+    Other lines follow the same filtering as run_sweep.tcl: comments removed,
+    blanks skipped, and entries require at least four tokens.
     """
 
-    lines: List[str] = []
+    assignments: list[str] = []
+    entries: list[str] = []
     with path.open() as fin:
         for raw in fin:
             stripped = raw.split("#", 1)[0].strip()
             if not stripped:
                 continue
+            if stripped.startswith("set "):
+                assignments.append(stripped)
+                continue
             if len(stripped.split()) < 4:
                 continue
-            lines.append(stripped)
-    return lines
+            entries.append(stripped)
+    return assignments, entries
+
+
+def load_completed_labels(summary_path: Path) -> Dict[str, None]:
+    completed: Dict[str, None] = {}
+    if not summary_path.exists():
+        return completed
+    with summary_path.open() as fin:
+        for line in fin:
+            line = line.strip()
+            if not line or line.startswith("label,"):
+                continue
+            label = line.split(",", 1)[0].strip()
+            if label:
+                completed[label] = None
+    return completed
+
+
+def build_run_label(line: str) -> str:
+    toks = line.split()
+    n = int(toks[0])
+    k = int(toks[1])
+    gf_width = int(toks[2])
+    clock_ps = float(toks[3])
+    lib_dir = toks[4] if len(toks) >= 5 else ""
+    top = toks[5] if len(toks) >= 6 else "rs_encoder_wrapper"
+    clk_ns = clock_ps / 1000.0
+    corner = Path(lib_dir).name if lib_dir else "lib"
+    return "N%02d_K%02d_GF%d_TT2T%03d_CLK%.3fns_%s_%s" % (
+        n,
+        k,
+        gf_width,
+        n - k,
+        clk_ns,
+        sanitize(corner),
+        sanitize(top),
+    )
 
 
 def chunk_round_robin(items: Sequence[str], n: int) -> List[List[str]]:
@@ -168,15 +214,37 @@ def main(argv: Sequence[str]) -> int:
         print(f"ERROR: run_sweep script not found: {args.run_script}", file=sys.stderr)
         return 1
 
-    configs = iter_config_lines(args.config)
-    if not configs:
+    assignments, configs = parse_config_for_parallel(args.config)
+
+    completed_labels = load_completed_labels(args.out_root / "summary.csv")
+    filtered_configs: List[str] = []
+    skipped_configs = 0
+    for line in configs:
+        try:
+            label = build_run_label(line)
+        except Exception as exc:
+            print(f"WARN: Could not derive label for line '{line}': {exc}", file=sys.stderr)
+            continue
+        if label in completed_labels:
+            skipped_configs += 1
+            print(f"INFO: Skipping already completed config: {label}")
+            continue
+        filtered_configs.append(line)
+
+    if skipped_configs and not filtered_configs:
+        print("INFO: All configurations already completed; nothing to do.")
+        return 0
+    if not filtered_configs:
         print(f"ERROR: No runnable configurations found in {args.config}", file=sys.stderr)
         return 1
 
-    num_workers = min(args.num_workers, len(configs))
+    if skipped_configs:
+        print(f"INFO: Skipped {skipped_configs} configuration(s) already present in summary.")
+
+    num_workers = min(args.num_workers, len(filtered_configs))
     ensure_dir(args.out_root)
 
-    partitions = chunk_round_robin(configs, num_workers)
+    partitions = chunk_round_robin(filtered_configs, num_workers)
 
     worker_dirs: List[Path] = []
     worker_summaries: List[Path] = []
@@ -188,9 +256,12 @@ def main(argv: Sequence[str]) -> int:
         tmp_dir = Path(tempfile.mkdtemp(prefix=f"sweep_worker_{worker_idx}_"))
         worker_dirs.append(tmp_dir)
         cfg_path = tmp_dir / "config.txt"
-        cfg_path.write_text("\n".join(entries) + "\n")
+        cfg_lines = assignments + entries
+        cfg_path.write_text("\n".join(cfg_lines) + "\n")
 
         summary_path = args.out_root / f"summary.worker{worker_idx}.csv"
+        if summary_path.exists():
+            summary_path.unlink()
         worker_summaries.append(summary_path)
 
         # Generate a per-worker wrapper Tcl script
@@ -199,6 +270,7 @@ def main(argv: Sequence[str]) -> int:
         lines.append(f"set CONFIG_FILE {cfg_path.resolve()}")
         lines.append(f"set OUT_ROOT {args.out_root}")
         lines.append(f"set SUMMARY_FILE {summary_path.resolve()}")
+        lines.append(f"set SUMMARY_CACHE_FILES {{{(args.out_root / 'summary.csv').resolve()}}}")
         # Instruct run_sweep.tcl to explicitly exit dc_shell on completion
         lines.append("set RUN_SWEEP_AUTO_EXIT 1")
         for definition in args.define:
@@ -218,8 +290,8 @@ def main(argv: Sequence[str]) -> int:
         worker_cmds.append(cmd)
 
     # Python 3.6 compatibility: avoid subscripting subprocess.Popen in annotations
-    procs: List[subprocess.Popen[str]] = []
     log_files: List[Optional[TextIO]] = []
+    worker_runs: List[Tuple[subprocess.Popen[str], Optional[TextIO], Path]] = []
     try:
         for idx, cmd in enumerate(worker_cmds):
             log_path = args.out_root / f"worker_{idx}.log"
@@ -227,32 +299,38 @@ def main(argv: Sequence[str]) -> int:
             if not args.dry_run:
                 log_file = log_path.open("w")
             printable_cmd = " ".join(cmd)
-            print(f"[worker {idx}] Launching: {printable_cmd}")
             if args.dry_run:
+                print(f"[worker {idx}] Launching: {printable_cmd}")
                 continue
             proc = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, text=True)
-            procs.append(proc)
+            print(f"[worker {idx}] Launching (pid={proc.pid}): {printable_cmd}")
             log_files.append(log_file)
+            worker_runs.append((proc, log_file, worker_summaries[idx]))
         if args.dry_run:
             return 0
 
         exit_code = 0
-        for idx, proc in enumerate(procs):
+        successful_summaries: List[Path] = []
+        for idx, (proc, _log_file, summary_path) in enumerate(worker_runs):
             rc = proc.wait()
             if rc != 0:
                 print(f"ERROR: Worker {idx} exited with code {rc}", file=sys.stderr)
                 exit_code = rc if exit_code == 0 else exit_code
-
-        if exit_code != 0:
-            return exit_code
+            else:
+                successful_summaries.append(summary_path)
 
         merged_summary = args.out_root / "summary.csv"
-        merge_summaries(worker_summaries, merged_summary)
-        print(f"INFO: Merged summary written to {merged_summary}")
+        if successful_summaries:
+            merge_summaries(successful_summaries, merged_summary)
+            print(f"INFO: Merged {len(successful_summaries)} worker summary file(s) into {merged_summary}")
 
         for summary in worker_summaries:
             if summary.exists():
                 summary.unlink()
+
+        if exit_code != 0:
+            print("WARN: One or more workers failed; rerun to cover remaining configurations.", file=sys.stderr)
+            return exit_code
 
         return 0
     finally:
