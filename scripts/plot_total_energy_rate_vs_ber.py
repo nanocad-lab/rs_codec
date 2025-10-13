@@ -19,10 +19,13 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
 SUMMARY_TECHS = ("ASAP7", "NanGate45")
-SUMMARY_ROOT_CANDIDATES = (ROOT / "paperdata", ROOT / "newdata")
+SUMMARY_ROOT_CANDIDATES = (ROOT / "paperdata",)
 
-DECODER_CYCLES = 2.0  # decoder uses two cycles per symbol
 DECODER_TOP = "rs_decoder"
+ENCODER_TOP = "rs_encoder_wrapper"
+SYNDROME_TOP = "rs_syndrome"
+STEP_DECADE = 1e-4
+STEP_FACTOR = 10 ** STEP_DECADE
 
 
 EnergyRow = TypedDict(
@@ -43,7 +46,8 @@ EnergyRow = TypedDict(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Plot total energy and rate vs BER")
-    parser.add_argument("--selection", type=Path, help="precomputed sweep CSV; skip generation if provided")
+    parser.add_argument("--selection", type=Path, default=Path("rsfec_selection_m8_n86.csv"),
+                        help="precomputed sweep CSV; default uses rsfec_selection_m8_n86.csv")
     parser.add_argument("--save-selection", type=Path, help="optional path to save generated sweep data")
     parser.add_argument("--k", type=int, help="force a specific data-symbol count K when generating a sweep")
     parser.add_argument("--min-exp", type=float, default=-30.0, help="minimum BER exponent (e.g., -30 for 1e-30)")
@@ -55,7 +59,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_or_generate_selection(
-    args: argparse.Namespace, targets: Optional[Iterable[float]]
+    args: argparse.Namespace, targets: Iterable[float]
 ) -> Tuple[pd.DataFrame, list[float]]:
     if args.selection is not None:
         df = pd.read_csv(args.selection)
@@ -65,7 +69,7 @@ def load_or_generate_selection(
             exp_start=args.max_exp,
             exp_stop=args.min_exp,
             exp_step=-abs(args.step),
-            targets=list(targets) if targets is not None else None,
+            targets=list(targets),
         )
         if args.save_selection is not None:
             args.save_selection.parent.mkdir(parents=True, exist_ok=True)
@@ -73,7 +77,7 @@ def load_or_generate_selection(
 
     df = df.dropna(subset=["n", "t"]).copy()
     df["target_post_BER"] = df["target_post_BER"].astype(float)
-    target_list = sorted(set(targets)) if targets is not None else sorted(df["target_post_BER"].unique())
+    target_list = sorted(set(targets))
     df["target_post_BER"] = df["target_post_BER"].apply(lambda val: match_target_ber(val, target_list))
     df = df.dropna(subset=["target_post_BER"])
     df["n"] = df["n"].astype(int)
@@ -94,19 +98,10 @@ def match_target_ber(value: float, targets: Iterable[float]) -> Optional[float]:
     if value <= 0.0:
         return None
 
-    log_value = math.log10(value)
-    best_target: Optional[float] = None
-    best_distance: Optional[float] = None
-
     for target in targets:
-        if target <= 0.0:
-            continue
-        distance = abs(math.log10(target) - log_value)
-        if best_distance is None or distance < best_distance:
-            best_distance = distance
-            best_target = float(target)
-
-    return best_target
+        if math.isclose(value, target, rel_tol=1e-9, abs_tol=max(1e-40, abs(target) * 1e-9)):
+            return float(target)
+    return None
 
 
 def find_summary_path(tech: str) -> Path:
@@ -116,6 +111,20 @@ def find_summary_path(tech: str) -> Path:
         if candidate.exists():
             return candidate
     raise FileNotFoundError(f"summary.csv for {tech} not found in expected directories")
+
+
+def _cycles_per_symbol(row: pd.Series) -> float:
+    top = row.get("top", "")
+    n = pd.to_numeric(row.get("N"), errors="coerce")
+    k = pd.to_numeric(row.get("K"), errors="coerce")
+    m_bits = pd.to_numeric(row.get("GF_WIDTH"), errors="coerce")
+    if pd.isna(k) or k == 0:
+        return float("nan")
+    if top == DECODER_TOP:
+        return (2.0 ** float(m_bits)) / float(k)
+    if top == ENCODER_TOP:
+        return float(n) / float(k)
+    return 1.0
 
 
 def p_correctable(n: int, t: int, p_b: float, m_bits: int) -> float:
@@ -150,31 +159,35 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
     for tech in SUMMARY_TECHS:
         summary_path = find_summary_path(tech)
         summary = pd.read_csv(summary_path)
-        summary["cycles"] = summary["top"].map(
-            lambda top: DECODER_CYCLES if top == DECODER_TOP else 1.0
-        )
+        summary["N"] = pd.to_numeric(summary["N"], errors="coerce")
+        summary["K"] = pd.to_numeric(summary["K"], errors="coerce")
+        summary["GF_WIDTH"] = pd.to_numeric(summary["GF_WIDTH"], errors="coerce")
+        summary["cycles"] = summary.apply(_cycles_per_symbol, axis=1)
         summary["energy_pj_per_bit"] = (
             summary["total_dyn_mw"]
             * summary["CLK_NS"]
             * summary["cycles"]
             / ((summary["K"] / summary["N"]) * summary["GF_WIDTH"])
         )
-        energy_map = summary.pivot_table(index="N", columns="top", values="energy_pj_per_bit")
+        energy_map = summary.pivot_table(index=["N", "K"], columns="top", values="energy_pj_per_bit")
 
         for _, sel_row in selection.iterrows():
             n = int(sel_row["n"])
             t = int(sel_row.get("t", 0))
+            k_val = int(sel_row.get("k", 0))
 
-            if t != 0 and n not in energy_map.index:
+            if t != 0 and (n, k_val) not in energy_map.index:
+                continue
+            if t != 0 and k_val >= n:
                 continue
 
             if t == 0:
                 enc_energy = syn_energy = dec_energy = 0.0
             else:
                 try:
-                    enc_energy = energy_map.loc[n, "rs_encoder_wrapper"]
-                    syn_energy = energy_map.loc[n, "rs_syndrome"]
-                    dec_energy = energy_map.loc[n, DECODER_TOP]
+                    enc_energy = energy_map.loc[(n, k_val), ENCODER_TOP]
+                    syn_energy = energy_map.loc[(n, k_val), SYNDROME_TOP]
+                    dec_energy = energy_map.loc[(n, k_val), DECODER_TOP]
                 except KeyError:
                     continue
 
@@ -185,13 +198,13 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
             if "m" in sel_row and not pd.isna(sel_row["m"]):
                 symbol_bits = int(sel_row["m"])
             else:
-                gf_widths = summary.loc[summary["N"] == n, "GF_WIDTH"]
-                if gf_widths.empty:
+                gf_widths = summary.loc[(summary["N"] == n) & (summary["K"] == k_val), "GF_WIDTH"]
+                if gf_widths.empty():
                     continue
                 symbol_bits = int(gf_widths.iloc[0])
 
             p_corr = p_correctable(n, t, p_in, symbol_bits)
-            total_energy = enc_energy + syn_energy + p_corr * (dec_energy - syn_energy)
+            total_energy = enc_energy + syn_energy + p_corr * dec_energy
 
             rows.append(
                 {
@@ -199,6 +212,7 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
                     "BER Target": target,
                     "input_preFEC_BER": p_in,
                     "n": n,
+                    "k": k_val,
                     "t": t,
                     "rate": rate,
                     "energy": total_energy,
@@ -207,10 +221,36 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
                 }
             )
 
-    df = pd.DataFrame(rows)
-    if not df.empty:
-        df = df[df["input_preFEC_BER"] > 0].reset_index(drop=True)
-    return df
+    dataset = pd.DataFrame(rows)
+    if dataset.empty:
+        return dataset
+
+    augmented: List[pd.DataFrame] = []
+    for (tech, target), group in dataset.groupby(["tech", "BER Target"], sort=False):
+        blk = group.sort_values("input_preFEC_BER").copy()
+        zero_row = blk.iloc[0].copy()
+        zero_row["input_preFEC_BER"] = float(target)
+        zero_row["energy"] = 0.0
+        zero_row["p_correctable"] = 0.0
+        zero_row["t"] = 0
+        zero_row["rate"] = 1.0
+        correcting = blk[blk["t"] > 0].copy()
+        rows_to_concat: List[pd.Series] = [zero_row]
+        if not correcting.empty:
+            first_corr = correcting.iloc[0].copy()
+            first_corr["input_preFEC_BER"] = float(target) * STEP_FACTOR
+            rows_to_concat.append(first_corr)
+            blk = correcting
+        else:
+            blk = correcting
+        combined = pd.concat([pd.DataFrame(rows_to_concat), blk], ignore_index=True)
+        augmented.append(combined)
+
+    combined = pd.concat(augmented, ignore_index=True)
+    combined = combined[combined["input_preFEC_BER"] > 0].copy()
+    combined = combined.sort_values(["tech", "BER Target", "input_preFEC_BER", "t"]).reset_index(drop=True)
+    combined = combined.drop_duplicates(subset=["tech", "BER Target", "input_preFEC_BER", "t"], keep="last")
+    return combined
 
 
 def plot_outputs(df: pd.DataFrame, targets: list[float], k: Optional[int]) -> None:
@@ -274,7 +314,7 @@ def plot_outputs(df: pd.DataFrame, targets: list[float], k: Optional[int]) -> No
         plt.xlim(x_min, x_right)
         plt.xlabel("Input Pre-FEC BER")
         plt.ylabel("Code rate (k/n)")
-        plt.title(f"{tech} RS(m=8,k={k}) Rate vs Input BER (targets: {targets_str})")
+        plt.title(f"{title_prefix} Rate vs Input BER (targets: {targets_str})")
         plt.tight_layout()
         plt.savefig(out_dir / f"{tech.lower()}_rate_vs_ber.png", dpi=200)
         plt.close()
@@ -282,7 +322,7 @@ def plot_outputs(df: pd.DataFrame, targets: list[float], k: Optional[int]) -> No
 
 def main() -> None:
     args = parse_args()
-    targets_input = sorted(set(args.targets)) if args.targets else None
+    targets_input = sorted(set(args.targets)) if args.targets else [1e-15, 1e-30]
     selection, targets = load_or_generate_selection(args, targets_input)
     dataset = build_dataset(selection)
     if dataset.empty:

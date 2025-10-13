@@ -70,9 +70,10 @@ Synthesis Sweeps (Design Compiler)
   - Figures (PNG + PDF): `rscodec_pj_per_bit_vs_input_BER.*`, `rscodec_rate_vs_input_BER.*`
   - Raw data (CSV): `rscodec_pj_per_bit_vs_input_BER.csv`, `rscodec_rate_vs_input_BER.csv`
   - Total pJ/bit (default): encoder energy + expected decoder energy per bit.
-    - Encoder: computed from `rs_encoder_wrapper` dynamic power and its cycles/symbol (default 1.0).
+    - Encoder: computed from `rs_encoder_wrapper` dynamic power; cycles/symbol defaults to `n/k` (override via CLI to explore alternatives).
     - Decoder (gated): `E_rx = E_syndrome + P_correctable × (E_decoder − E_syndrome)` with
       `P_correctable = Σ_{i=1..t} Binom(n,i) p_s^i (1−p_s)^(n−i)`, `p_s = 1 − (1−p_b)^m`.
-      Cycles/symbol: syndrome default 1.0, decoder default 2.0 (half-decoder).
-    - Throughput used: `rate × m × f_clk / cycles_per_symbol` per block.
+      Cycles/symbol: syndrome default 1.0, decoder defaults to `2**m/k` (overrideable).
+- Throughput uses `rate × m × f_clk / cycles_per_symbol` where cycles are derived from the configuration (`n/k` for the encoder, `2**m/k` for the decoder unless overridden).
+  - Default BER targets across the plotting scripts are `1e-15` and `1e-30` (override with `--target`).
   - Legends are formatted as exact targets (`1e-12`, `1e-15`, `1e-30`).

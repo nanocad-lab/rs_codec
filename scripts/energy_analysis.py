@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Callable, Dict, Tuple
 
 import re
 
@@ -24,10 +24,31 @@ class SweepResult:
     knee_idx: int
 
 
-BLOCK_INFO: dict[str, tuple[str, float]] = {
-    "rs_encoder_wrapper": ("Encoder", 1.0),
-    "rs_syndrome": ("Syndrome", 1.0),
-    "rs_decoder": ("Decoder", 1.0),
+CyclesFn = Callable[[pd.DataFrame], pd.Series]
+
+
+def _encoder_cycles(df: pd.DataFrame) -> pd.Series:
+    n = pd.to_numeric(df["N"], errors="coerce")
+    k = pd.to_numeric(df["K"], errors="coerce")
+    cycles = n / k
+    return cycles.replace([np.inf, -np.inf], np.nan)
+
+
+def _decoder_cycles(df: pd.DataFrame) -> pd.Series:
+    m_bits = pd.to_numeric(df["GF_WIDTH"], errors="coerce")
+    k = pd.to_numeric(df["K"], errors="coerce")
+    cycles = np.power(2.0, m_bits) / k
+    return cycles.replace([np.inf, -np.inf], np.nan)
+
+
+def _syndrome_cycles(df: pd.DataFrame) -> pd.Series:
+    return pd.Series(1.0, index=df.index, dtype=float)
+
+
+BLOCK_INFO: dict[str, tuple[str, CyclesFn]] = {
+    "rs_encoder_wrapper": ("Encoder", _encoder_cycles),
+    "rs_syndrome": ("Syndrome", _syndrome_cycles),
+    "rs_decoder": ("Decoder", _decoder_cycles),
 }
 
 
@@ -104,9 +125,22 @@ def _populate_power_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _aggregate_block(block_df: pd.DataFrame, cycles_per_symbol: float) -> pd.DataFrame:
+def _aggregate_block(block_df: pd.DataFrame, cycles_fn: CyclesFn) -> pd.DataFrame:
+    if block_df.empty:
+        return block_df
+
+    df = block_df.copy()
+    df["cycles_per_symbol"] = cycles_fn(df)
+    df["freq_hz"] = 1.0 / (df["CLK_NS"] * 1e-9)
+    df["freq_mhz"] = df["freq_hz"] / 1e6
+    rate = df["K"] / df["N"]
+    m = pd.to_numeric(df["GF_WIDTH"], errors="coerce")
+    df["energy_pj_per_bit"] = (
+        df["total_power_mw"] * df["CLK_NS"] * df["cycles_per_symbol"] / (rate * m)
+    )
+
     grouped = (
-        block_df.groupby("CLK_NS", as_index=False)
+        df.groupby("CLK_NS", as_index=False)
         .agg(
             {
                 "total_power_mw": "mean",
@@ -116,17 +150,12 @@ def _aggregate_block(block_df: pd.DataFrame, cycles_per_symbol: float) -> pd.Dat
                 "K": "first",
                 "GF_WIDTH": "first",
                 "wns_ns": "mean",
+                "freq_hz": "first",
+                "freq_mhz": "first",
+                "energy_pj_per_bit": "mean",
             }
         )
         .rename(columns={"total_power_mw": "power_mw"})
-    )
-
-    grouped["freq_hz"] = 1.0 / (grouped["CLK_NS"] * 1e-9)
-    grouped["freq_mhz"] = grouped["freq_hz"] / 1e6
-    rate = grouped["K"] / grouped["N"]
-    m = grouped["GF_WIDTH"].astype(float)
-    grouped["energy_pj_per_bit"] = (
-        grouped["power_mw"] * grouped["CLK_NS"] * cycles_per_symbol / (rate * m)
     )
 
     return grouped.sort_values("freq_mhz").reset_index(drop=True)
@@ -175,11 +204,11 @@ def load_sweep(summary_paths: list[Path], name: str) -> list[SweepResult]:
     block_frames: dict[str, pd.DataFrame] = {}
     results: list[SweepResult] = []
 
-    for top, (label, cycles) in BLOCK_INFO.items():
+    for top, (label, cycles_fn) in BLOCK_INFO.items():
         block_df = df[df["top"] == top].copy()
         if block_df.empty:
             continue
-        aggregated = _aggregate_block(block_df, cycles)
+        aggregated = _aggregate_block(block_df, cycles_fn)
         block_frames[top] = aggregated
         results.append(_make_result(f"{name} {label}", label.lower(), aggregated))
 

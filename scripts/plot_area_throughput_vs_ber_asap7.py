@@ -18,7 +18,7 @@ import gen_k_sweep
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
-SUMMARY_TECHS = ("ASAP7", "NanGate45")
+SUMMARY_TECHS = ("ASAP7",)
 SUMMARY_ROOT_CANDIDATES = (ROOT / "paperdata",)
 DECODER_TOP = "rs_decoder"
 ENCODER_TOP = "rs_encoder_wrapper"
@@ -189,14 +189,12 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
         if blk.empty:
             continue
         first = blk.iloc[0]
-        # Zero-cost point exactly at the target BER
         zero_row = first.copy()
         zero_row["input_preFEC_BER"] = float(target)
         zero_row["area_total_um2"] = 0.0
         zero_row["area_total_mm2"] = 0.0
         zero_row["area_per_gbps"] = 0.0
         zero_row["rate"] = 1.0
-        # Step transition slightly above the target BER using the lightest correcting code
         step_row = first.copy()
         step_row["input_preFEC_BER"] = float(target) * STEP_FACTOR
         blk = pd.concat([pd.DataFrame([zero_row, step_row]), blk], ignore_index=True)
@@ -210,56 +208,25 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
 def plot_area_vs_ber(df: pd.DataFrame, targets: list[float]) -> None:
     out_dir = ROOT / "plots"
     out_dir.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out_dir / "area_per_gbps_vs_ber.csv", index=False)
+    asap_data = df[df["tech"] == "ASAP7"].copy()
+    if asap_data.empty:
+        raise ValueError("No ASAP7 data available for plotting")
+
+    asap_data.to_csv(out_dir / "area_per_gbps_vs_ber_asap7.csv", index=False)
 
     sns.set_style("darkgrid")
-    fig, ax_left = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8/1.3, 5/1.3))
 
     bers_sorted = sorted(targets)
     colors = sns.color_palette("tab10", len(bers_sorted))
-    marker_cycle_left: Iterator[str] = cycle(("o", "s", "d", "^"))
-    marker_cycle_right: Iterator[str] = cycle(("^", "v", "<", ">"))
+    marker_cycle: Iterator[str] = cycle(("o", "s", "d", "^"))
 
-    nan_lines = []
-    nan_labels = []
-    nan_data = df[df["tech"] == "NanGate45"]
-    for color, ber in zip(colors, bers_sorted):
-        subset = nan_data[nan_data["target_post_BER"] == ber].sort_values("input_preFEC_BER")
-        if subset.empty:
-            continue
-        marker = next(marker_cycle_left)
-        (line,) = ax_left.plot(
-            subset["input_preFEC_BER"],
-            subset["area_per_gbps"],
-            marker=marker,
-            color=color,
-            label=f"NanGate45 target {ber:.0e}",
-        )
-        nan_lines.append(line)
-        nan_labels.append(f"NanGate45 target {ber:.0e}")
-
-    ax_left.set_xscale("log")
-    if not nan_data.empty:
-        x_min = nan_data["input_preFEC_BER"].min()
-        x_max = nan_data["input_preFEC_BER"].max()
-        ax_left.set_xlim(x_min, x_max)
-        nan_top = nan_data["area_per_gbps"].max() * 1.05
-        if nan_top == 0:
-            nan_top = 0.1
-        ax_left.set_ylim(0, max(nan_top, 0.015))
-    ax_left.set_xlabel("Input pre-FEC BER")
-    ax_left.set_ylabel("NanGate45 area per throughput (mm²/Gbps)")
-
-    ax_right = ax_left.twinx()
-    asap_lines = []
-    asap_labels = []
-    asap_data = df[df["tech"] == "ASAP7"]
     for color, ber in zip(colors, bers_sorted):
         subset = asap_data[asap_data["target_post_BER"] == ber].sort_values("input_preFEC_BER")
         if subset.empty:
             continue
-        marker = next(marker_cycle_right)
-        (line,) = ax_right.plot(
+        marker = next(marker_cycle)
+        ax.plot(
             subset["input_preFEC_BER"],
             subset["area_per_gbps"],
             marker=marker,
@@ -267,26 +234,25 @@ def plot_area_vs_ber(df: pd.DataFrame, targets: list[float]) -> None:
             linestyle="--",
             label=f"ASAP7 target {ber:.0e}",
         )
-        asap_lines.append(line)
-        asap_labels.append(f"ASAP7 target {ber:.0e}")
 
-    ax_right.set_xscale("log")
-    ax_right.set_ylabel("ASAP7 area per throughput (mm²/Gbps)")
-    if not asap_data.empty:
-        asap_top = asap_data["area_per_gbps"].max() * 1.05
-        if asap_top == 0:
-            asap_top = 0.01
-        ax_right.set_ylim(0, max(asap_top, 0.0015))
+    ax.set_xscale("log")
+    x_min = asap_data["input_preFEC_BER"].min()
+    x_max = asap_data["input_preFEC_BER"].max()
+    #ax.set_xlim(x_min, x_max)
+    ax.set_xlim(1e-18, x_max)
+    asap_top = asap_data["area_per_gbps"].max() * 1.05
+    if asap_top == 0:
+        asap_top = 0.01
+    ax.set_ylim(0, max(asap_top, 0.0015))
+    ax.set_xlabel("Input pre-FEC BER")
+    ax.set_ylabel("ASAP7 area per throughput (mm²/Gbps)")
 
     title_targets = ", ".join(f"{ber:.0e}" for ber in bers_sorted)
-    fig.suptitle(f"FEC Area per Throughput vs Raw BER (Targets {title_targets})")
-
-    handles = nan_lines + asap_lines
-    labels = nan_labels + asap_labels
-    ax_left.legend(handles, labels, loc="upper left", framealpha=1.0, facecolor="white")
+    ax.set_title(f"FEC Area per Throughput vs Raw BER (Targets {title_targets})")
+    ax.legend(loc="upper left", framealpha=1.0, facecolor="white")
 
     fig.tight_layout()
-    fig.savefig(out_dir / "area_per_gbps_vs_ber.png", dpi=200)
+    fig.savefig(out_dir / "area_per_gbps_vs_ber_asap7.png", dpi=200)
     plt.close(fig)
 
 

@@ -15,11 +15,13 @@ import seaborn as sns
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-BER_TARGETS = (1e-12, 1e-15, 1e-20, 1e-25, 1e-30)
+BER_TARGETS = (1e-15, 1e-30)
 LOG_BER_MARGIN = 1e-3
 LOG_MIN_VALUE = 1e-300
-
-
+SUMMARY_ROOT_CANDIDATES = (ROOT / "paperdata",)
+ENCODER_TOP = "rs_encoder_wrapper"
+SYNDROME_TOP = "rs_syndrome"
+DECODER_TOP = "rs_decoder"
 @dataclass(frozen=True)
 class ScalingModel:
     node_nm: int
@@ -101,36 +103,119 @@ def log_ber_distance(a: float, b: float) -> float:
     return abs(math.log10(a) - math.log10(b))
 
 
-def lookup_fec_area_per_gbps(
-    area_df: Optional[pd.DataFrame],
-    tech: str,
-    target_ber: float,
-    input_ber: float,
-) -> float:
-    if area_df is None or area_df.empty:
+def corrected_codeword_probability(n: int, t: int, m_bits: int, p_b: float) -> float:
+    if t <= 0 or p_b <= 0.0:
+        return 0.0
+    if p_b >= 1.0:
+        return 1.0
+
+    p_s = 1.0 - (1.0 - p_b) ** m_bits
+    if p_s <= 0.0:
+        return 0.0
+    if p_s >= 1.0:
+        return 1.0
+
+    log1m = math.log1p(-p_s)
+    total = 0.0
+    for i in range(1, min(t, n) + 1):
+        logc = math.lgamma(n + 1) - math.lgamma(i + 1) - math.lgamma(n - i + 1)
+        logpmf = logc + i * math.log(p_s) + (n - i) * log1m
+        total += math.exp(logpmf)
+    return min(max(total, 0.0), 1.0)
+
+
+def find_summary_path(tech: str) -> Path:
+    tech_dir = f"{tech.lower()}_code_sweep"
+    for base in SUMMARY_ROOT_CANDIDATES:
+        candidate = base / tech_dir / "summary.csv"
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(f"summary.csv for {tech} not found in expected directories")
+
+
+def _cycles_per_symbol(row: pd.Series) -> float:
+    top = row.get("top", "")
+    n = pd.to_numeric(row.get("N"), errors="coerce")
+    k = pd.to_numeric(row.get("K"), errors="coerce")
+    m_bits = pd.to_numeric(row.get("GF_WIDTH"), errors="coerce")
+    if pd.isna(k) or k == 0:
         return float("nan")
+    if top == DECODER_TOP:
+        return (2.0 ** float(m_bits)) / float(k)
+    if top == ENCODER_TOP:
+        return float(n) / float(k)
+    return 1.0
 
-    data = area_df[area_df["tech"] == tech]
-    if data.empty:
-        return float("nan")
 
-    target_rows = rows_matching_log_ber(data, "target_post_BER", target_ber)
-    if not target_rows.empty:
-        data = target_rows
+def _lookup_df(table_multi: pd.DataFrame, table_single: Optional[pd.DataFrame], n: int, k: int, column: str) -> float:
+    if isinstance(table_multi.index, pd.MultiIndex):
+        key = (n, k)
+        if key in table_multi.index:
+            value = table_multi.loc[key, column]
+            if isinstance(value, pd.Series):
+                value = value.iloc[0]
+            return float(value)
+    if table_single is not None and n in table_single.index:
+        value = table_single.loc[n, column]
+        if isinstance(value, pd.Series):
+            value = value.iloc[0]
+        return float(value)
+    raise KeyError(f"No entry for N={n}, K={k} in column '{column}'")
 
-    if "input_preFEC_BER" not in data.columns or "area_per_gbps" not in data.columns:
-        return float("nan")
 
-    series = data["input_preFEC_BER"].astype(float)
-    positive = series > 0.0
-    if not positive.any():
-        return float("nan")
+def _lookup_series(series_multi: pd.Series, series_single: Optional[pd.Series], n: int, k: int) -> float:
+    if isinstance(series_multi.index, pd.MultiIndex):
+        key = (n, k)
+        if key in series_multi.index:
+            value = series_multi.loc[key]
+            if isinstance(value, pd.Series):
+                value = value.iloc[0]
+            return float(value)
+    if series_single is not None and n in series_single.index:
+        value = series_single.loc[n]
+        if isinstance(value, pd.Series):
+            value = value.iloc[0]
+        return float(value)
+    raise KeyError(f"No GF entry for N={n}, K={k}")
 
-    log_input = math.log10(max(input_ber, LOG_MIN_VALUE))
-    log_values = series[positive].map(lambda value: math.log10(value))
-    distances = (log_values - log_input).abs()
-    idx = distances.idxmin()
-    return float(data.loc[idx, "area_per_gbps"])
+
+def load_summary_tables() -> dict[str, dict[str, pd.DataFrame]]:
+    tables: dict[str, dict[str, pd.DataFrame]] = {}
+    for tech in BASE_DATASET_NODES:
+        path = find_summary_path(tech)
+        summary = pd.read_csv(path)
+        summary["N"] = pd.to_numeric(summary["N"], errors="coerce")
+        summary["K"] = pd.to_numeric(summary["K"], errors="coerce")
+        summary["GF_WIDTH"] = pd.to_numeric(summary["GF_WIDTH"], errors="coerce")
+        summary["cycles"] = summary.apply(_cycles_per_symbol, axis=1)
+        summary["energy_pj_per_bit"] = (
+            summary["total_dyn_mw"]
+            * summary["CLK_NS"]
+            * summary["cycles"]
+            / ((summary["K"] / summary["N"]) * summary["GF_WIDTH"])
+        )
+
+        energy_map = summary.pivot_table(index=["N", "K"], columns="top", values="energy_pj_per_bit")
+        energy_map_n = summary.pivot_table(index="N", columns="top", values="energy_pj_per_bit")
+        area_map = summary.pivot_table(index=["N", "K"], columns="top", values="area")
+        area_map_n = summary.pivot_table(index="N", columns="top", values="area")
+        clk_map = summary.pivot_table(index=["N", "K"], columns="top", values="CLK_NS")
+        clk_map_n = summary.pivot_table(index="N", columns="top", values="CLK_NS")
+        gf_map = summary.set_index(["N", "K"])["GF_WIDTH"].sort_index()
+        gf_map_n = summary.groupby("N")["GF_WIDTH"].first()
+
+        tables[tech] = {
+            "energy": energy_map,
+            "energy_n": energy_map_n,
+            "area": area_map,
+            "area_n": area_map_n,
+            "clk": clk_map,
+            "clk_n": clk_map_n,
+            "gf": gf_map,
+            "gf_n": gf_map_n,
+        }
+
+    return tables
 
 
 def closest_row_by_ber(df: pd.DataFrame, target_ber: float) -> pd.Series:
@@ -161,14 +246,7 @@ def compute_metrics() -> pd.DataFrame:
         for name in BASE_DATASET_NODES
     }
 
-    area_path = ROOT / "plots" / "area_per_gbps_vs_ber.csv"
-    if area_path.exists():
-        area_df: Optional[pd.DataFrame] = pd.read_csv(area_path)
-        for col in ["target_post_BER", "input_preFEC_BER", "area_per_gbps"]:
-            if col in area_df.columns:
-                area_df[col] = area_df[col].astype(float)
-    else:
-        area_df = None
+    summary_tables = load_summary_tables()
 
     rows = []
     for _, link in links.iterrows():
@@ -201,7 +279,15 @@ def compute_metrics() -> pd.DataFrame:
             code_rate = 1.0
             fec_energy = 0.0
             fec_energy_scaled = 0.0
-            fec_area_per_gbps = lookup_fec_area_per_gbps(area_df, dataset, target_ber, link_ber)
+            fec_area_per_gbps = 0.0
+
+            per_block = {
+                "encoder": 0.0,
+                "syndrome": 0.0,
+                "decoder": 0.0,
+            }
+
+            p_corr = 0.0
 
             if link_ber > target_ber and log_ber_distance(link_ber, target_ber) > LOG_BER_MARGIN:
                 target_df = fec_df
@@ -210,22 +296,64 @@ def compute_metrics() -> pd.DataFrame:
                     if not target_rows.empty:
                         target_df = target_rows
 
-                fec_row = closest_row_by_ber(target_df, link_ber)
-                if "t" in fec_row and not pd.isna(fec_row["t"]) and int(fec_row["t"]) == 0:
-                    code_rate = 1.0
-                    fec_energy = 0.0
-                    fec_energy_scaled = 0.0
-                else:
-                    code_rate = float(fec_row["rate"])
-                    fec_energy = float(fec_row["energy"])
-                    fec_energy_scaled = fec_energy * (energy_factor_target / energy_factor_base)
+                if "t" in target_df.columns:
+                    correcting_df = target_df[target_df["t"] > 0]
+                    if not correcting_df.empty:
+                        target_df = correcting_df
 
-                fec_area_per_gbps = lookup_fec_area_per_gbps(
-                    area_df,
-                    dataset,
-                    target_ber,
-                    float(fec_row.get("input_preFEC_BER", link_ber)),
-                )
+                fec_row = closest_row_by_ber(target_df, link_ber)
+                tables = summary_tables.get(dataset)
+                if tables is None:
+                    pass
+                else:
+                    n = int(fec_row.get("n", 0)) if "n" in fec_row else 0
+                    t = int(fec_row.get("t", 0)) if "t" in fec_row else 0
+                    k_val = int(fec_row.get("k", 0)) if "k" in fec_row else 0
+
+                    if t != 0 and n > 0 and k_val > 0 and k_val < n:
+                        energy_map = tables["energy"]
+                        energy_map_n = tables.get("energy_n")
+                        area_map = tables["area"]
+                        area_map_n = tables.get("area_n")
+                        clk_map = tables["clk"]
+                        clk_map_n = tables.get("clk_n")
+                        gf_map = tables["gf"]
+                        gf_map_n = tables.get("gf_n")
+
+                        try:
+                            enc_energy = _lookup_df(energy_map, energy_map_n, n, k_val, ENCODER_TOP)
+                            syn_energy = _lookup_df(energy_map, energy_map_n, n, k_val, SYNDROME_TOP)
+                            dec_energy = _lookup_df(energy_map, energy_map_n, n, k_val, DECODER_TOP)
+                            symbol_bits = int(_lookup_series(gf_map, gf_map_n, n, k_val))
+                        except KeyError:
+                            pass
+                        else:
+                            code_rate = float(fec_row.get("rate", code_rate))
+                            p_corr = corrected_codeword_probability(n, t, symbol_bits, link_ber)
+
+                            fec_energy = enc_energy + syn_energy + p_corr * (dec_energy - syn_energy)
+                            fec_energy_scaled = fec_energy * (energy_factor_target / energy_factor_base)
+
+                            per_block = {
+                                "encoder": enc_energy,
+                                "syndrome": syn_energy,
+                                "decoder": dec_energy,
+                            }
+
+                            try:
+                                area_encoder = _lookup_df(area_map, area_map_n, n, k_val, ENCODER_TOP)
+                                area_syndrome = _lookup_df(area_map, area_map_n, n, k_val, SYNDROME_TOP)
+                                area_decoder = _lookup_df(area_map, area_map_n, n, k_val, DECODER_TOP)
+                                clk_ns = _lookup_df(clk_map, clk_map_n, n, k_val, DECODER_TOP)
+                                decoder_cycles = (2.0 ** symbol_bits) / k_val
+                                throughput_bps = code_rate * symbol_bits / (decoder_cycles * clk_ns * 1e-9)
+                                if throughput_bps > 0:
+                                    throughput_gbps = throughput_bps / 1e9
+                                    fec_area_per_gbps = (area_total_um2 := area_encoder + area_syndrome + area_decoder) / 1e6 / throughput_gbps
+                                else:
+                                    fec_area_per_gbps = float("nan")
+                            except KeyError:
+                                fec_area_per_gbps = float("nan")
 
             fom_raw = gbps_per_mm / link_energy
             numerator = gbps_per_mm * code_rate
@@ -254,6 +382,10 @@ def compute_metrics() -> pd.DataFrame:
                     "Energy_factor_target": energy_factor_target,
                     "Energy_scaling_source": scaling_source,
                     "FEC_area_per_gbps_scaled": fec_area_per_gbps,
+                    "FEC_p_correctable": p_corr,
+                    "FEC_encoder_energy_pJ": per_block["encoder"],
+                    "FEC_syndrome_energy_pJ": per_block["syndrome"],
+                    "FEC_decoder_energy_pJ": per_block["decoder"],
                 }
             )
 
@@ -266,7 +398,7 @@ def write_outputs(df: pd.DataFrame) -> None:
     df_sorted.to_csv(out_csv, index=False)
 
     sns.set_style("darkgrid")
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8/1.3, 5/1.3))
     ordered_names = list(dict.fromkeys(df_sorted["Name"]))
     colors = sns.color_palette("tab10", len(ordered_names))
     name_to_color = dict(zip(ordered_names, colors))

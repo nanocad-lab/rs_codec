@@ -16,7 +16,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
 SUMMARY_TECHS = ("ASAP7", "NanGate45")
-DEFAULT_SUMMARY_ROOTS = (ROOT / "paperdata", ROOT / "newdata")
+DEFAULT_SUMMARY_ROOTS = (ROOT / "paperdata",)
 
 # Decoder consumes two cycles per symbol; encoder/syndrome consume one.
 DECODER_TOP = "rs_decoder"
@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
         "--summary-root",
         action="append",
         type=Path,
-        help="Root directory containing <tech>_code_sweep/summary.csv (default: paperdata/, newdata/)",
+        help="Root directory containing <tech>_code_sweep/summary.csv (default: paperdata/)",
     )
     parser.add_argument(
         "--n",

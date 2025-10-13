@@ -8,7 +8,7 @@ Energy per information bit (pJ/bit) = total_dyn_mW * CLK_NS * cycles_per_symbol 
 Where:
 - rate = K / N
 - m = GF_WIDTH (bits per symbol)
-- cycles_per_symbol = 2 for 'rs_decoder' (half-decoder), else 1
+- cycles_per_symbol defaults to n/k for the encoder and 2**m/k for the decoder
 
 The input CSV must contain columns:
   label,top,N,K,GF_WIDTH,CLK_NS,area,wns,total_dyn_mw
@@ -23,6 +23,7 @@ import sys
 
 
 DECODER_TOP = "rs_decoder"
+ENCODER_TOP = "rs_encoder_wrapper"
 
 
 def _to_float(value: Optional[str]) -> Optional[float]:
@@ -51,7 +52,12 @@ def compute_pj_per_bit(row: MutableMapping[str, Optional[str]]) -> float:
         return float("nan")
 
     rate = k / n
-    cycles_per_symbol = 2.0 if top == DECODER_TOP else 1.0
+    if top == DECODER_TOP:
+        cycles_per_symbol = (2.0 ** m) / k
+    elif top == ENCODER_TOP:
+        cycles_per_symbol = n / k
+    else:
+        cycles_per_symbol = 1.0
     pj = p_mw * clk_ns * cycles_per_symbol / (rate * m)
     return pj
 

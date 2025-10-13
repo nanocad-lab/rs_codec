@@ -12,9 +12,9 @@ Assumptions
 - GF width is taken from the selection file (expect `m=8`).
 - Use decoder energy for pJ/bit: `top == 'rs_decoder'`.
 - Throughput model (from the referenced paper):
-  - Streaming decoder that processes one symbol every `DEC_CYCLES_PER_SYMBOL` clocks.
-  - For the half-decoder configuration, `DEC_CYCLES_PER_SYMBOL = 2`.
-  - Information-bit throughput (bits/s) = `rate * m * f_clk / DEC_CYCLES_PER_SYMBOL`.
+  - Cycles-per-symbol defaults are derived from the code parameters:
+    encoder = `n / k`, decoder = `2**m / k`.
+  - Information-bit throughput (bits/s) = `rate * m * f_clk / cycles_per_symbol`.
 - Energy per information bit pJ/bit = `1e9 * total_dyn_mW / throughput_bits_per_s`.
 
 Outputs
@@ -38,9 +38,12 @@ from pathlib import Path
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 TOP_CHOICES = ["rs_decoder", "rs_encoder_wrapper", "rs_syndrome"]
+STEP_DECADE = 1e-4  # add a small offset in decades above the target BER
+STEP_FACTOR = 10 ** STEP_DECADE
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,12 +52,12 @@ def parse_args() -> argparse.Namespace:
                    help="Path to selection CSV produced by rsfec_select_and_cfg.py")
     p.add_argument("--summary", type=Path, default=Path("paperdata/asap7_code_sweep/summary.csv"),
                    help="Path to synthesis summary CSV with power and clock info")
-    # Non-gated mode: choose a single top and its cycles-per-symbol
+    # Non-gated mode: choose a single top; cycles-per-symbol defaults are derived from (N,K,m)
     p.add_argument("--top", type=str, default="rs_decoder",
                    choices=TOP_CHOICES,
                    help="Top block for non-gated pJ/bit computation")
-    p.add_argument("--cycles-per-symbol", type=float, default=2.0,
-                   help="Cycles per processed symbol for --top (2.0 for half-decoder)")
+    p.add_argument("--cycles-per-symbol", type=float, default=None,
+                   help="Override cycles-per-symbol for --top; default uses n/k for encoder and 2**m/k for decoder")
     # Gated mode: combine syndrome + decoder based on corrected-codeword probability
     p.add_argument("--gated", action="store_true",
                    help="Enable decoder clock gating model: E = E_syndrome + P_correctable * (E_decoder - E_syndrome)")
@@ -66,14 +69,14 @@ def parse_args() -> argparse.Namespace:
                    help="Top name for decoder energy when --gated")
     p.add_argument("--syndrome-cycles-per-symbol", type=float, default=1.0,
                    help="Cycles per symbol for the syndrome block when --gated")
-    p.add_argument("--decoder-cycles-per-symbol", type=float, default=2.0,
-                   help="Cycles per symbol for the decoder block when --gated (2.0 for half-decoder)")
+    p.add_argument("--decoder-cycles-per-symbol", type=float, default=None,
+                   help="Override decoder cycles-per-symbol when --gated; default uses 2**m/k")
     # Encoder contribution
     p.add_argument("--encoder-top", type=str, default="rs_encoder_wrapper",
                    choices=TOP_CHOICES,
                    help="Top name for encoder energy contribution")
-    p.add_argument("--encoder-cycles-per-symbol", type=float, default=1.0,
-                   help="Cycles per symbol for the encoder (typically 1.0)")
+    p.add_argument("--encoder-cycles-per-symbol", type=float, default=None,
+                   help="Override encoder cycles-per-symbol; default uses n/k")
     p.add_argument("--no-encoder", dest="include_encoder", action="store_false",
                    help="Exclude encoder energy from total pJ/bit")
     p.set_defaults(include_encoder=True)
@@ -137,10 +140,56 @@ def compute_metrics_single_top(df: pd.DataFrame, cycles_per_symbol: float, prefi
     clk_col = f"{prefix}CLK_NS" if prefix else "CLK_NS"
     pwr_col = f"{prefix}total_dyn_mw" if prefix else "total_dyn_mw"
     out[f"{prefix}fclk_hz"] = 1e9 / out[clk_col]
-    out[f"{prefix}symbols_per_s"] = out[f"{prefix}fclk_hz"] / cycles_per_symbol
+    if np.isscalar(cycles_per_symbol):
+        denom = float(cycles_per_symbol)
+        denom = np.nan if denom == 0 else denom
+        out[f"{prefix}symbols_per_s"] = out[f"{prefix}fclk_hz"] / denom
+    else:
+        denom = pd.Series(cycles_per_symbol, index=out.index, dtype=float)
+        denom = denom.where(denom != 0.0, np.nan)
+        out[f"{prefix}symbols_per_s"] = out[f"{prefix}fclk_hz"] / denom
     out[f"{prefix}throughput_bps"] = out["rate"] * out["m"] * out[f"{prefix}symbols_per_s"]
     out[f"{prefix}pj_per_bit"] = 1e9 * out[pwr_col] / out[f"{prefix}throughput_bps"]
     return out
+
+
+def _encoder_cycles_from_df(df: pd.DataFrame) -> pd.Series:
+    n = pd.to_numeric(df["N"], errors="coerce")
+    k = pd.to_numeric(df["K"], errors="coerce")
+    cycles = n / k
+    return cycles.replace([np.inf, -np.inf], np.nan)
+
+
+def _decoder_cycles_from_df(df: pd.DataFrame) -> pd.Series:
+    m_bits = pd.to_numeric(df["m"], errors="coerce")
+    k = pd.to_numeric(df["K"], errors="coerce")
+    cycles = np.power(2.0, m_bits) / k
+    return cycles.replace([np.inf, -np.inf], np.nan)
+
+
+def _default_cycles_for_top(top: str, df: pd.DataFrame) -> pd.Series:
+    if top == "rs_encoder_wrapper":
+        return _encoder_cycles_from_df(df)
+    if top == "rs_decoder":
+        return _decoder_cycles_from_df(df)
+    return pd.Series(1.0, index=df.index, dtype=float)
+
+
+def _insert_step_transition(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    pieces = []
+    for target, group in df.groupby("target_post_BER", sort=False):
+        block = group.sort_values("input_preFEC_BER").copy()
+        correcting = block[block["t"] > 0]
+        if not correcting.empty:
+            step_row = correcting.iloc[0].copy()
+            step_row["input_preFEC_BER"] = float(target) * STEP_FACTOR
+            block = pd.concat([block, step_row.to_frame().T], ignore_index=True)
+        pieces.append(block)
+    combined = pd.concat(pieces, ignore_index=True)
+    combined = combined.sort_values(["target_post_BER", "input_preFEC_BER", "t"]).reset_index(drop=True)
+    return combined
 
 
 def corrected_codeword_probability(n: int, t: int, m_bits: int, p_b: float) -> float:
@@ -258,10 +307,20 @@ def main() -> None:
             print(f"Warning: {missing} selection rows lack matching (N,K) for syndrome/decoder and were dropped.")
 
         # Compute pJ/bit for each block with their own cycles-per-symbol
-        metrics = compute_metrics_single_top(merged, args.syndrome_cycles_per_symbol, prefix="syn_")
-        metrics = compute_metrics_single_top(metrics, args.decoder_cycles_per_symbol, prefix="dec_")
+        syn_cycles = args.syndrome_cycles_per_symbol
+        if syn_cycles is None:
+            syn_cycles = _default_cycles_for_top(args.syndrome_top, merged)
+        metrics = compute_metrics_single_top(merged, syn_cycles, prefix="syn_")
+
+        dec_cycles = args.decoder_cycles_per_symbol
+        if dec_cycles is None:
+            dec_cycles = _default_cycles_for_top(args.decoder_top, merged)
+        metrics = compute_metrics_single_top(metrics, dec_cycles, prefix="dec_")
         if args.include_encoder:
-            metrics = compute_metrics_single_top(metrics, args.encoder_cycles_per_symbol, prefix="enc_")
+            enc_cycles = args.encoder_cycles_per_symbol
+            if enc_cycles is None:
+                enc_cycles = _default_cycles_for_top(args.encoder_top, merged)
+            metrics = compute_metrics_single_top(metrics, enc_cycles, prefix="enc_")
 
         # Compute corrected-codeword probability and effective pJ/bit (gated)
         corr_probs = []
@@ -273,7 +332,7 @@ def main() -> None:
             pc = corrected_codeword_probability(n, t, m_bits, p_b) if (n is not None) else 0.0
             corr_probs.append(pc)
         metrics["p_correctable"] = corr_probs
-        rx_pj = metrics["syn_pj_per_bit"] + metrics["p_correctable"] * (metrics["dec_pj_per_bit"] - metrics["syn_pj_per_bit"])
+        rx_pj = metrics["syn_pj_per_bit"] + metrics["p_correctable"] * metrics["dec_pj_per_bit"]
         metrics["rx_pj_per_bit"] = rx_pj
         if args.include_encoder:
             metrics["total_pj_per_bit"] = metrics["enc_pj_per_bit"] + rx_pj
@@ -295,15 +354,23 @@ def main() -> None:
         if missing:
             print(f"Warning: {missing} selection rows lack matching (N,K) in summary and were dropped.")
 
-        metrics = compute_metrics_single_top(merged, args.cycles_per_symbol, prefix="")
+        cycles = args.cycles_per_symbol
+        if cycles is None:
+            cycles = _default_cycles_for_top(args.top, merged)
+        metrics = compute_metrics_single_top(merged, cycles, prefix="")
         if args.include_encoder:
-            metrics = compute_metrics_single_top(metrics, args.encoder_cycles_per_symbol, prefix="enc_")
+            enc_cycles = args.encoder_cycles_per_symbol
+            if enc_cycles is None:
+                enc_cycles = _default_cycles_for_top(args.encoder_top, merged)
+            metrics = compute_metrics_single_top(metrics, enc_cycles, prefix="enc_")
             metrics["total_pj_per_bit"] = metrics["enc_pj_per_bit"] + metrics["pj_per_bit"]
         else:
             metrics["total_pj_per_bit"] = metrics["pj_per_bit"]
 
+    # Add a tiny step just above each target BER to visualise the discontinuity
+    metrics = _insert_step_transition(metrics)
+
     # Prepare nicely formatted target labels for legend
-    import numpy as np
     def _fmt_label(x: float) -> str:
         if x <= 0:
             return str(x)
