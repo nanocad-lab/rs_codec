@@ -123,33 +123,34 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
             / ((summary["K"] / summary["N"]) * summary["GF_WIDTH"])
         )
 
-        area_map = summary.pivot_table(index="N", columns="top", values="area")
-        clk_map = summary.pivot_table(index="N", columns="top", values="CLK_NS")
+        area_map = summary.pivot_table(index=["N", "K"], columns="top", values="area")
+        clk_map = summary.pivot_table(index=["N", "K"], columns="top", values="CLK_NS")
 
         for _, sel in selection.iterrows():
             if int(sel["k"]) >= int(sel["n"]):
                 continue
-            if sel["n"] not in area_map.index:
+            key = (int(sel["n"]), int(sel["k"]))
+            if key not in area_map.index or key not in clk_map.index:
                 continue
 
             try:
-                area_encoder = area_map.loc[sel["n"], "rs_encoder_wrapper"]
-                area_syndrome = area_map.loc[sel["n"], "rs_syndrome"]
-                area_decoder = area_map.loc[sel["n"], DECODER_TOP]
+                area_encoder = area_map.loc[key, "rs_encoder_wrapper"]
+                area_syndrome = area_map.loc[key, "rs_syndrome"]
+                area_decoder = area_map.loc[key, DECODER_TOP]
             except KeyError:
                 continue
 
-            clk_ns = clk_map.loc[sel["n"], DECODER_TOP]
+            clk_ns = clk_map.loc[key, DECODER_TOP]
             area_total_um2 = area_encoder + area_syndrome + area_decoder
             area_total_mm2 = area_total_um2 / 1e6
 
             if "m" in sel and not pd.isna(sel["m"]):
                 symbol_bits = int(sel["m"])
             else:
-                gf_widths = summary.loc[summary["N"] == sel["n"], "GF_WIDTH"]
-                if gf_widths.empty:
+                summary_rows = summary[(summary["N"] == key[0]) & (summary["K"] == key[1])]
+                if summary_rows.empty:
                     continue
-                symbol_bits = int(gf_widths.iloc[0])
+                symbol_bits = int(summary_rows["GF_WIDTH"].iloc[0])
 
             k_val = float(sel["k"])
             if not math.isfinite(k_val) or k_val == 0:
