@@ -8,7 +8,7 @@ from typing import Optional
 
 import math
 import matplotlib.pyplot as plt
-import numpy as np
+#import numpy as np
 import pandas as pd
 import seaborn as sns
 
@@ -44,11 +44,33 @@ ENERGY_MODELS = {
      7: ScalingModel(7, (0.1776, -0.09097, 0.02447), 0.80),
 }
 
+# DeepScaleTool.xlsm encodes area ratios derived from Stillmaker & Baas (2017)
+# Table 4. Values here are the relative area “units” for each node; a smaller node
+# has a smaller unit value. We only keep entries that overlap with the dataset
+# energy models so that mapping logic stays consistent.
+AREA_UNITS = {
+    45: 16.949152542372882,
+    32: 7.692307692307692,
+    20: 3.571428571428571,
+    16: 3.2258064516129035,
+    14: 2.941176470588235,
+    10: 1.7241379310344829,
+     7: 1.0,
+}
+
 TSMC_SUB7_SCALING = {
     # Public TSMC guidance: N5 ~30% power reduction vs N7, N3 ~30% vs N5.
     # Values are relative multipliers to ASAP7's energy factor.
     5: 0.70,
     3: 0.49,  # 0.70 (N5/N7) * 0.70 (N3/N5)
+}
+
+# TSMC marketing material cites ~1.84× logic density for N5 over N7 and ~1.7× for
+# N3 over N5. Convert those gains into relative area units with ASAP7 (7 nm) set to
+# an area unit of 1.0.
+TSMC_SUB7_AREA_UNITS = {
+    5: 1.0 / 1.84,
+    3: (1.0 / 1.84) / 1.7,
 }
 
 
@@ -261,15 +283,20 @@ def compute_metrics() -> pd.DataFrame:
             fec_df["BER Target"] = fec_df["BER Target"].astype(float)
 
         energy_factor_base = ENERGY_MODELS[base_node].energy_factor()
+        area_unit_base = AREA_UNITS.get(base_node)
         if process_nm < 7:
             tsmc_scale, tsmc_ref = tsmc_scaling_factor(process_nm)
             energy_factor_target = energy_factor_base * tsmc_scale
             target_node = tsmc_ref
-            scaling_source = f"TSMC_public_{tsmc_ref}nm"
+            energy_scaling_source = f"TSMC_public_{tsmc_ref}nm"
+            area_unit_target = TSMC_SUB7_AREA_UNITS.get(tsmc_ref)
+            area_scaling_source = f"TSMC_public_{tsmc_ref}nm"
         else:
             target_node = map_process_to_model(process_nm)
             energy_factor_target = ENERGY_MODELS[target_node].energy_factor()
-            scaling_source = f"Polynomial_{target_node}nm"
+            energy_scaling_source = f"Polynomial_{target_node}nm"
+            area_unit_target = AREA_UNITS.get(target_node)
+            area_scaling_source = f"DeepScale_{target_node}nm"
 
         gbps_per_mm = link["Gbps_per_mm"]
         link_energy = link["pJ_per_bit"]
@@ -279,7 +306,11 @@ def compute_metrics() -> pd.DataFrame:
             code_rate = 1.0
             fec_energy = 0.0
             fec_energy_scaled = 0.0
-            fec_area_per_gbps = 0.0
+            fec_area_per_gbps_unscaled = float("nan")
+            fec_area_per_gbps_scaled = float("nan")
+            fec_area_scale_factor = float("nan")
+            fec_area_total_um2 = float("nan")
+            fec_area_total_um2_scaled = float("nan")
 
             per_block = {
                 "encoder": 0.0,
@@ -347,13 +378,31 @@ def compute_metrics() -> pd.DataFrame:
                                 clk_ns = _lookup_df(clk_map, clk_map_n, n, k_val, DECODER_TOP)
                                 decoder_cycles = (2.0 ** symbol_bits) / k_val
                                 throughput_bps = code_rate * symbol_bits / (decoder_cycles * clk_ns * 1e-9)
+                                area_total_um2 = area_encoder + area_syndrome + area_decoder
+                                fec_area_total_um2 = area_total_um2
+
                                 if throughput_bps > 0:
                                     throughput_gbps = throughput_bps / 1e9
-                                    fec_area_per_gbps = (area_total_um2 := area_encoder + area_syndrome + area_decoder) / 1e6 / throughput_gbps
+                                    fec_area_per_gbps_unscaled = (area_total_um2 / 1e6) / throughput_gbps
                                 else:
-                                    fec_area_per_gbps = float("nan")
+                                    throughput_gbps = float("nan")
+                                    fec_area_per_gbps_unscaled = float("nan")
+
+                                if area_unit_base is not None and area_unit_target is not None:
+                                    fec_area_scale_factor = area_unit_target / area_unit_base
+                                    fec_area_total_um2_scaled = area_total_um2 * fec_area_scale_factor
+                                else:
+                                    fec_area_scale_factor = float("nan")
+                                    fec_area_total_um2_scaled = float("nan")
+
+                                if throughput_bps > 0 and not math.isnan(fec_area_scale_factor):
+                                    fec_area_per_gbps_scaled = (fec_area_total_um2_scaled / 1e6) / throughput_gbps
                             except KeyError:
-                                fec_area_per_gbps = float("nan")
+                                fec_area_per_gbps_unscaled = float("nan")
+                                fec_area_per_gbps_scaled = float("nan")
+                                fec_area_scale_factor = float("nan")
+                                fec_area_total_um2 = float("nan")
+                                fec_area_total_um2_scaled = float("nan")
 
             fom_raw = gbps_per_mm / link_energy
             numerator = gbps_per_mm * code_rate
@@ -380,8 +429,13 @@ def compute_metrics() -> pd.DataFrame:
                     "FoM_fec_scaled": numerator / denom_scaled,
                     "Energy_factor_base": energy_factor_base,
                     "Energy_factor_target": energy_factor_target,
-                    "Energy_scaling_source": scaling_source,
-                    "FEC_area_per_gbps_scaled": fec_area_per_gbps,
+                    "Energy_scaling_source": energy_scaling_source,
+                    "Area_scaling_source": area_scaling_source,
+                    "FEC_area_scale_factor": fec_area_scale_factor,
+                    "FEC_area_total_um2": fec_area_total_um2,
+                    "FEC_area_total_um2_scaled": fec_area_total_um2_scaled,
+                    "FEC_area_per_gbps_unscaled": fec_area_per_gbps_unscaled,
+                    "FEC_area_per_gbps_scaled": fec_area_per_gbps_scaled,
                     "FEC_p_correctable": p_corr,
                     "FEC_encoder_energy_pJ": per_block["encoder"],
                     "FEC_syndrome_energy_pJ": per_block["syndrome"],
@@ -404,7 +458,7 @@ def write_outputs(df: pd.DataFrame) -> None:
     name_to_color = dict(zip(ordered_names, colors))
 
     target_markers = {
-        1e-12: "x",
+        1e-12: "o",
         1e-15: "+",
         1e-20: "s",
         1e-25: "d",
@@ -420,7 +474,7 @@ def write_outputs(df: pd.DataFrame) -> None:
         reach = group.iloc[0]["Reach_mm"]
         fom_raw = group.iloc[0]["FoM_raw"]
 
-        ax.scatter(reach, fom_raw, marker="1", color=color, s=55)
+        ax.scatter(reach, fom_raw, marker="x", color=color, s=55)
         ax.annotate(
             name,
             (reach, fom_raw),
@@ -450,7 +504,7 @@ def write_outputs(df: pd.DataFrame) -> None:
     from matplotlib.lines import Line2D
 
     legend_handles = [
-        Line2D([0], [0], marker="1", color="black", markerfacecolor="black", markersize=6, linestyle="None", label="Raw FoM")
+        Line2D([0], [0], marker="x", color="black", markerfacecolor="black", markersize=6, linestyle="None", label="Raw FoM")
     ]
     for target_ber in BER_TARGETS:
         marker = target_markers[target_ber]

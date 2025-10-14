@@ -237,7 +237,7 @@ def plot_area_vs_ber(df: pd.DataFrame, targets: list[float]) -> None:
         )
 
     ax.set_xscale("log")
-    x_min = asap_data["input_preFEC_BER"].min()
+    #x_min = asap_data["input_preFEC_BER"].min()
     x_max = asap_data["input_preFEC_BER"].max()
     #ax.set_xlim(x_min, x_max)
     ax.set_xlim(1e-18, x_max)
