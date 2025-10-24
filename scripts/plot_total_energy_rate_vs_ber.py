@@ -298,7 +298,7 @@ def plot_outputs(df: pd.DataFrame, targets: list[float], k: Optional[int]) -> No
             title_prefix = f"{tech} RS({k_label})"
         plt.title(f"{title_prefix} Energy/bit vs Input BER (targets: {targets_str})")
         plt.tight_layout()
-        plt.savefig(out_dir / f"{tech.lower()}_energy_vs_ber.png", dpi=200)
+        plt.savefig(out_dir / f"{tech.lower()}_energy_vs_ber.pdf")
         plt.close()
 
         plt.figure(figsize=(8, 5))
@@ -316,7 +316,7 @@ def plot_outputs(df: pd.DataFrame, targets: list[float], k: Optional[int]) -> No
         plt.ylabel("Code rate (k/n)")
         plt.title(f"{title_prefix} Rate vs Input BER (targets: {targets_str})")
         plt.tight_layout()
-        plt.savefig(out_dir / f"{tech.lower()}_rate_vs_ber.png", dpi=200)
+        plt.savefig(out_dir / f"{tech.lower()}_rate_vs_ber.pdf")
         plt.close()
 
 

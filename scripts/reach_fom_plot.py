@@ -523,7 +523,7 @@ def write_outputs(df: pd.DataFrame) -> None:
     ax.legend(handles=legend_handles, loc="lower left")
 
     fig.tight_layout()
-    fig.savefig(ROOT / "plots" / "reach_vs_fom_raw_vs_fec.png", dpi=200)
+    fig.savefig(ROOT / "plots" / "reach_vs_fom_raw_vs_fec.pdf")
 
 
 def main() -> None:

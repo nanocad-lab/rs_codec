@@ -242,12 +242,7 @@ def plot_pj_per_bit_vs_ber(df: pd.DataFrame, outpath: Path, style: str) -> None:
     ax.legend(title="Target post-FEC BER")
     plt.tight_layout()
     outpath.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(outpath, dpi=200)
-    # Also save as PDF
-    try:
-        plt.savefig(outpath.with_suffix('.pdf'))
-    except Exception as e:
-        print(f"Warning: failed to save PDF for {outpath}: {e}")
+    plt.savefig(outpath)
     plt.close()
 
 
@@ -275,12 +270,7 @@ def plot_rate_vs_ber(df: pd.DataFrame, outpath: Path, style: str) -> None:
     ax.legend(title="Target post-FEC BER")
     plt.tight_layout()
     outpath.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(outpath, dpi=200)
-    # Also save as PDF
-    try:
-        plt.savefig(outpath.with_suffix('.pdf'))
-    except Exception as e:
-        print(f"Warning: failed to save PDF for {outpath}: {e}")
+    plt.savefig(outpath)
     plt.close()
 
 
@@ -389,8 +379,8 @@ def main() -> None:
     # Plot uses total energy per bit
     plot_df = metrics.copy()
     plot_df["pj_per_bit"] = plot_df["total_pj_per_bit"]
-    plot_pj_per_bit_vs_ber(plot_df, pj_base.with_suffix('.png'), args.style)
-    plot_rate_vs_ber(metrics, rate_base.with_suffix('.png'), args.style)
+    plot_pj_per_bit_vs_ber(plot_df, pj_base.with_suffix('.pdf'), args.style)
+    plot_rate_vs_ber(metrics, rate_base.with_suffix('.pdf'), args.style)
 
     # Raw CSVs
     pj_cols = [

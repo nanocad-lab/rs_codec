@@ -253,7 +253,7 @@ def plot_area_vs_ber(df: pd.DataFrame, targets: list[float]) -> None:
     ax.legend(loc="upper left", framealpha=1.0, facecolor="white")
 
     fig.tight_layout()
-    fig.savefig(out_dir / "area_per_gbps_vs_ber_asap7.png", dpi=200)
+    fig.savefig(out_dir / "area_per_gbps_vs_ber_asap7.pdf")
     plt.close(fig)
 
 
