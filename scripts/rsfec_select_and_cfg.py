@@ -15,10 +15,10 @@ n_fixed = 86
 
 # Input/output BER design points (override as needed)
 worst_input_preFEC_BER = 1e-3
-worst_target_post_BER = 1e-30
+worst_target_post_BER = 1e-27
 
 # Targets to characterize; selection CSV will include thresholds for each
-targets = [1e-12, 1e-15, 1e-20, 1e-25, 1e-30]
+targets = [1e-12, 1e-15, 1e-20, 1e-25, 1e-27]
 
 # Binary-search termination: stop when upper/lower differ by <= this many decades
 LOG_BER_TOL = 1e-3
@@ -30,7 +30,7 @@ k_min = 2  # minimum data symbols to explore (adjust as needed)
 k_candidates = [k for k in range(k_max, k_min - 1, -2)]
 
 # Synthesis-config formatting
-LIB = "/w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT"
+LIB = "-"  # Use '-' placeholder; pass DEFAULT_LIB_DIR at synthesis time.
 clock_ps = 5000.0  # 5.0 ns
 # -------------------------------
 

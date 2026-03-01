@@ -7,11 +7,17 @@
 # - Produces power, area, and timing reports per run
 #
 # Usage:
+#   # ASAP7 (paper default code sweep):
 #   dc_shell -f scripts/run_asap7.tcl \
-#     -x "set CONFIG_FILE config/sweep_configs_asap7.txt" \
-#     -x "set OUT_ROOT data/asap7_sweep"
-# Or, for Nangate45, use the convenience wrapper:
-#   dc_shell -f scripts/run_nangate45.tcl
+#     -x "set CONFIG_FILE config/sweep_code_n86_asap7.txt" \
+#     -x "set OUT_ROOT data/asap7_code_sweep" \
+#     -x "set DEFAULT_LIB_DIR /path/to/asap7/TT"
+#
+#   # Nangate45 (paper default code sweep):
+#   dc_shell -f scripts/run_nangate45.tcl \
+#     -x "set CONFIG_FILE config/sweep_code_n86_nangate45.txt" \
+#     -x "set OUT_ROOT data/nangate45_code_sweep" \
+#     -x "set DEFAULT_LIB_DIR /path/to/NanGate45/db"
 #
 # Config file format (whitespace separated; # for comments):
 #   N K GF_WIDTH clock_ps [library_dir] [top]
@@ -24,10 +30,10 @@
 
 # --------- User/Env overrides ---------
 if {![info exists CONFIG_FILE]} {
-  set CONFIG_FILE "config/sweep_configs_asap7_exhaustive.txt"
+  set CONFIG_FILE "config/sweep_code_n86_asap7.txt"
 }
 if {![info exists OUT_ROOT]} {
-  set OUT_ROOT "data/asap7_sweep_gate_512"
+  set OUT_ROOT "data/asap7_code_sweep"
 }
 if {![info exists SUMMARY_FILE]} {
   set SUMMARY_FILE "$OUT_ROOT/summary.csv"
@@ -622,6 +628,7 @@ while {[gets $fh line] >= 0} {
   set TOP_ENTITY "rs_encoder_wrapper"
   if {[llength $toks] >= 5} { set LIB_DIR   [lindex $toks 4] }
   if {[llength $toks] >= 6} { set TOP_ENTITY [lindex $toks 5] }
+  if {$LIB_DIR eq "-" || $LIB_DIR eq "DEFAULT"} { set LIB_DIR "" }
   if {$LIB_DIR eq "" && $DEFAULT_LIB_DIR ne ""} { set LIB_DIR $DEFAULT_LIB_DIR }
 
   set label [build_run_label $N $K $GF_WIDTH $CLK_PS $LIB_DIR $TOP_ENTITY]

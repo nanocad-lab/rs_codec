@@ -15,7 +15,7 @@ import seaborn as sns
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-BER_TARGETS = (1e-15, 1e-30)
+BER_TARGETS = (1e-15, 1e-27)
 LOG_BER_MARGIN = 1e-3
 LOG_MIN_VALUE = 1e-300
 SUMMARY_ROOT_CANDIDATES = (ROOT / "paperdata",)
@@ -462,7 +462,7 @@ def write_outputs(df: pd.DataFrame) -> None:
         1e-15: "+",
         1e-20: "s",
         1e-25: "d",
-        1e-30: "^",
+        1e-27: "^",
     }
 
     for name in ordered_names:

@@ -22,8 +22,6 @@ SUMMARY_TECHS = ("ASAP7", "NanGate45")
 SUMMARY_ROOT_CANDIDATES = (ROOT / "paperdata",)
 DECODER_TOP = "rs_decoder"
 ENCODER_TOP = "rs_encoder_wrapper"
-STEP_DECADE = 1e-4
-STEP_FACTOR = 10 ** STEP_DECADE
 
 
 AreaRow = TypedDict(
@@ -183,29 +181,8 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
     dataset = pd.DataFrame(rows)
     if dataset.empty:
         return dataset
-
-    augmented: list[pd.DataFrame] = []
-    for (tech, target), group in dataset.groupby(["tech", "target_post_BER"], sort=False):
-        blk = group.sort_values("input_preFEC_BER").copy()
-        if blk.empty:
-            continue
-        first = blk.iloc[0]
-        # Zero-cost point exactly at the target BER
-        zero_row = first.copy()
-        zero_row["input_preFEC_BER"] = float(target)
-        zero_row["area_total_um2"] = 0.0
-        zero_row["area_total_mm2"] = 0.0
-        zero_row["area_per_gbps"] = 0.0
-        zero_row["rate"] = 1.0
-        # Step transition slightly above the target BER using the lightest correcting code
-        step_row = first.copy()
-        step_row["input_preFEC_BER"] = float(target) * STEP_FACTOR
-        blk = pd.concat([pd.DataFrame([zero_row, step_row]), blk], ignore_index=True)
-        augmented.append(blk)
-
-    combined = pd.concat(augmented, ignore_index=True)
-    combined = combined.sort_values(["tech", "target_post_BER", "input_preFEC_BER"]).reset_index(drop=True)
-    return combined
+    dataset = dataset.sort_values(["tech", "target_post_BER", "input_preFEC_BER"]).reset_index(drop=True)
+    return dataset
 
 
 def plot_area_vs_ber(df: pd.DataFrame, targets: list[float]) -> None:
@@ -297,7 +274,7 @@ def parse_args() -> argparse.Namespace:
                         help="precomputed sweep CSV; default uses rsfec_selection_m8_n86.csv")
     parser.add_argument("--save-selection", type=Path, help="optional path to save generated sweep data")
     parser.add_argument("--k", type=int, help="force a specific data-symbol count K when generating sweep data")
-    parser.add_argument("--min-exp", type=float, default=-30.0, help="minimum BER exponent (e.g., -30 for 1e-30)")
+    parser.add_argument("--min-exp", type=float, default=-27.0, help="minimum BER exponent (e.g., -27 for 1e-27)")
     parser.add_argument("--max-exp", type=float, default=-3.0, help="maximum BER exponent (e.g., -3 for 1e-3)")
     parser.add_argument("--step", type=float, default=0.5, help="log-scale step size in decades")
     parser.add_argument("--target", type=float, action="append", dest="targets", help="target post-FEC BER (repeatable)")
@@ -307,7 +284,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    targets = sorted(set(args.targets)) if args.targets else [1e-15, 1e-30]
+    targets = sorted(set(args.targets)) if args.targets else [1e-15, 1e-27]
     selection = load_or_generate_selection(args, targets)
     dataset = build_dataset(selection)
     plot_area_vs_ber(dataset, targets)

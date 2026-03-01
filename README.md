@@ -1,7 +1,5 @@
 # rs_codec
 
-**If you're already using this repo, see this patch: <https://github.com/mateusgs/rs_codec/commit/4ca278ca88efe6b2975cf8431e16ef8106898bb4>**
-
 This project comprises the RTL developement of a paramerizable RS Codec. It provides both RS encoder and decoder, and the following parameters that be adjusted in their instantiation.
 
 N - Length of the codeword (message) -  Range -> 2 to 1023
@@ -51,7 +49,7 @@ Contact <matgonsil@gmail.com> (Mateus Silva) for any questions.
 Synthesis Sweeps (Design Compiler)
 
 - Multi-config synthesis sweep scripts and configs are included to evaluate area/timing/power across RS blocks.
-- See `README_sweep_asap7.md` for details. It covers ASAP7 (via `config/sweep_configs_asap7.txt`) and Nangate45 (via `config/sweep_configs_nangate45.txt`),
+- See `README_sweep.md` for details. Paper-default configs live under `config/` (code sweep + frequency sweep for ASAP7 and NanGate45),
   along with a Python helper that can split configuration files across multiple Design Compiler workers.
 - Outputs per run include standard reports and a summary CSV with columns:
   - `label,top,N,K,GF_WIDTH,CLK_NS,area,wns,total_dyn_mw`.
@@ -61,13 +59,13 @@ Synthesis Sweeps (Design Compiler)
 - Script: `scripts/plot_rs_codec_vs_ber.py`
 - Inputs:
   - RS-FEC selection: `rsfec_selection_m8_n86.csv` (from `scripts/rsfec_select_and_cfg.py`)
-  - Synthesis summary: `data/asap7_sweep_n86/summary.csv`
+  - Synthesis summary: `paperdata/asap7_code_sweep/summary.csv`
 - Run:
-  - `python scripts/plot_rs_codec_vs_ber.py --selection rsfec_selection_m8_n86.csv --summary data/asap7_sweep_n86/summary.csv`
+  - `python scripts/plot_rs_codec_vs_ber.py --selection rsfec_selection_m8_n86.csv --summary paperdata/asap7_code_sweep/summary.csv`
   - With decoder clock gating (syndrome-only for clean words):
-    - `python scripts/plot_rs_codec_vs_ber.py --selection rsfec_selection_m8_n86.csv --summary data/asap7_sweep_n86/summary.csv --gated --syndrome-cycles-per-symbol 1 --decoder-cycles-per-symbol 2`
+    - `python scripts/plot_rs_codec_vs_ber.py --selection rsfec_selection_m8_n86.csv --summary paperdata/asap7_code_sweep/summary.csv --gated --syndrome-cycles-per-symbol 1 --decoder-cycles-per-symbol 2`
 - Outputs (under `plots/`):
-  - Figures (PNG + PDF): `rscodec_pj_per_bit_vs_input_BER.*`, `rscodec_rate_vs_input_BER.*`
+  - Figures (PNG + PDF): `rscodec_pj_per_bit_vs_input_BER.*`, `rscodec_rate_vs_input_BER.*`, `rscodec_energy_rate_vs_input_BER.*`
   - Raw data (CSV): `rscodec_pj_per_bit_vs_input_BER.csv`, `rscodec_rate_vs_input_BER.csv`
   - Total pJ/bit (default): encoder energy + expected decoder energy per bit.
     - Encoder: computed from `rs_encoder_wrapper` dynamic power; cycles/symbol defaults to `n/k` (override via CLI to explore alternatives).
@@ -75,5 +73,12 @@ Synthesis Sweeps (Design Compiler)
       `P_correctable = Σ_{i=1..t} Binom(n,i) p_s^i (1−p_s)^(n−i)`, `p_s = 1 − (1−p_b)^m`.
       Cycles/symbol: syndrome default 1.0, decoder defaults to `2**m/k` (overrideable).
 - Throughput uses `rate × m × f_clk / cycles_per_symbol` where cycles are derived from the configuration (`n/k` for the encoder, `2**m/k` for the decoder unless overridden).
-  - Default BER targets across the plotting scripts are `1e-15` and `1e-30` (override with `--target`).
-  - Legends are formatted as exact targets (`1e-12`, `1e-15`, `1e-30`).
+  - Default BER targets across the plotting scripts are `1e-15` and `1e-27` (override with `--target`).
+  - Legends are formatted as exact targets (`1e-12`, `1e-15`, `1e-27`).
+
+## Plots: Throughput Density vs Input BER (ASAP7)
+
+- Script: `scripts/plot_rscodec_density_vs_ber_asap7.py`
+- Input: `plots/area_per_gbps_vs_ber_asap7.csv` (regenerate via `scripts/plot_area_throughput_vs_ber_asap7.py`)
+- Run: `python scripts/plot_rscodec_density_vs_ber_asap7.py --paper`
+- Outputs (under `plots/`): `rscodec_density_vs_input_BER_asap7.*` (+ CSV)

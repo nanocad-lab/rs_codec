@@ -88,5 +88,5 @@ def main(path: Path) -> int:
 
 
 if __name__ == "__main__":
-    target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/asap7_sweep_clock_gate/summary.csv")
+    target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("paperdata/asap7_code_sweep/summary.csv")
     sys.exit(main(target))

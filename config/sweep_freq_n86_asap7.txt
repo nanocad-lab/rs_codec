@@ -1,34 +1,36 @@
 # RS(86,82) GF1024 Energy Sweep (ASAP7)
 # Targeted for input BER = 1e-4, target post-FEC BER = 1e-15 (t = 15)
 # Format: N K GF_WIDTH clock_ps [library_dir] [top]
-
-# set LIB /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT
+#
+# Notes:
+# - Set token 5 (library_dir) to "-" and pass `DEFAULT_LIB_DIR` via dc_shell -x
+#   (or via `scripts/run_sweep_parallel.py --define DEFAULT_LIB_DIR=...`).
 
 # Decoder dominates energy. Only sweep rs_decoder across a wide
 # range of clock periods (0.6 ns up to 3 ns).
 
-86 82 8 600.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 650.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 666.7 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 675.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 689.7 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 700.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 714.3 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 725.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 750.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 775.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 800.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 850.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 900.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 950.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 1000.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 1050.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 1100.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 1150.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 1200.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 1400.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 1600.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 1800.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 2000.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 2500.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
-86 82 8 3000.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder
+86 82 8 600.0 - rs_decoder
+86 82 8 650.0 - rs_decoder
+86 82 8 666.7 - rs_decoder
+86 82 8 675.0 - rs_decoder
+86 82 8 689.7 - rs_decoder
+86 82 8 700.0 - rs_decoder
+86 82 8 714.3 - rs_decoder
+86 82 8 725.0 - rs_decoder
+86 82 8 750.0 - rs_decoder
+86 82 8 775.0 - rs_decoder
+86 82 8 800.0 - rs_decoder
+86 82 8 850.0 - rs_decoder
+86 82 8 900.0 - rs_decoder
+86 82 8 950.0 - rs_decoder
+86 82 8 1000.0 - rs_decoder
+86 82 8 1050.0 - rs_decoder
+86 82 8 1100.0 - rs_decoder
+86 82 8 1150.0 - rs_decoder
+86 82 8 1200.0 - rs_decoder
+86 82 8 1400.0 - rs_decoder
+86 82 8 1600.0 - rs_decoder
+86 82 8 1800.0 - rs_decoder
+86 82 8 2000.0 - rs_decoder
+86 82 8 2500.0 - rs_decoder
+86 82 8 3000.0 - rs_decoder

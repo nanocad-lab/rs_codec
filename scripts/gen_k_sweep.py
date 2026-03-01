@@ -58,7 +58,7 @@ def generate_sweep(
     *,
     k: Optional[int] = None,
     exp_start: float = -3.0,
-    exp_stop: float = -30.0,
+    exp_stop: float = -27.0,
     exp_step: float = -0.5,
     targets: Iterable[float] | None = None,
 ) -> pd.DataFrame:
@@ -111,7 +111,7 @@ def generate_sweep(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate RS(n,k) sweep vs BER using rsfec_select_and_cfg settings")
     parser.add_argument("--k", type=int, help="force a specific data-symbol count K (defaults to best K per target)")
-    parser.add_argument("--min-exp", type=float, default=-30.0, help="smallest exponent (e.g., -30 for 1e-30)")
+    parser.add_argument("--min-exp", type=float, default=-27.0, help="smallest exponent (e.g., -27 for 1e-27)")
     parser.add_argument("--max-exp", type=float, default=-3.0, help="largest exponent (e.g., -3 for 1e-3)")
     parser.add_argument("--step", type=float, default=0.5, help="step size in decades")
     parser.add_argument("--target", type=float, action="append", dest="targets", help="target post-FEC BER (can repeat)")

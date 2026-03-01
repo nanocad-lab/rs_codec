@@ -24,8 +24,6 @@ SUMMARY_ROOT_CANDIDATES = (ROOT / "paperdata",)
 DECODER_TOP = "rs_decoder"
 ENCODER_TOP = "rs_encoder_wrapper"
 SYNDROME_TOP = "rs_syndrome"
-STEP_DECADE = 1e-4
-STEP_FACTOR = 10 ** STEP_DECADE
 
 
 EnergyRow = TypedDict(
@@ -50,7 +48,7 @@ def parse_args() -> argparse.Namespace:
                         help="precomputed sweep CSV; default uses rsfec_selection_m8_n86.csv")
     parser.add_argument("--save-selection", type=Path, help="optional path to save generated sweep data")
     parser.add_argument("--k", type=int, help="force a specific data-symbol count K when generating a sweep")
-    parser.add_argument("--min-exp", type=float, default=-30.0, help="minimum BER exponent (e.g., -30 for 1e-30)")
+    parser.add_argument("--min-exp", type=float, default=-27.0, help="minimum BER exponent (e.g., -27 for 1e-27)")
     parser.add_argument("--max-exp", type=float, default=-3.0, help="maximum BER exponent (e.g., -3 for 1e-3)")
     parser.add_argument("--step", type=float, default=0.5, help="log-scale step size in decades")
     parser.add_argument("--target", type=float, action="append", dest="targets", help="target post-FEC BER (repeatable)")
@@ -224,33 +222,10 @@ def build_dataset(selection: pd.DataFrame) -> pd.DataFrame:
     dataset = pd.DataFrame(rows)
     if dataset.empty:
         return dataset
-
-    augmented: List[pd.DataFrame] = []
-    for (tech, target), group in dataset.groupby(["tech", "BER Target"], sort=False):
-        blk = group.sort_values("input_preFEC_BER").copy()
-        zero_row = blk.iloc[0].copy()
-        zero_row["input_preFEC_BER"] = float(target)
-        zero_row["energy"] = 0.0
-        zero_row["p_correctable"] = 0.0
-        zero_row["t"] = 0
-        zero_row["rate"] = 1.0
-        correcting = blk[blk["t"] > 0].copy()
-        rows_to_concat: List[pd.Series] = [zero_row]
-        if not correcting.empty:
-            first_corr = correcting.iloc[0].copy()
-            first_corr["input_preFEC_BER"] = float(target) * STEP_FACTOR
-            rows_to_concat.append(first_corr)
-            blk = correcting
-        else:
-            blk = correcting
-        combined = pd.concat([pd.DataFrame(rows_to_concat), blk], ignore_index=True)
-        augmented.append(combined)
-
-    combined = pd.concat(augmented, ignore_index=True)
-    combined = combined[combined["input_preFEC_BER"] > 0].copy()
-    combined = combined.sort_values(["tech", "BER Target", "input_preFEC_BER", "t"]).reset_index(drop=True)
-    combined = combined.drop_duplicates(subset=["tech", "BER Target", "input_preFEC_BER", "t"], keep="last")
-    return combined
+    dataset = dataset[dataset["input_preFEC_BER"] > 0].copy()
+    dataset = dataset.sort_values(["tech", "BER Target", "input_preFEC_BER", "t"]).reset_index(drop=True)
+    dataset = dataset.drop_duplicates(subset=["tech", "BER Target", "input_preFEC_BER", "t"], keep="last")
+    return dataset
 
 
 def plot_outputs(df: pd.DataFrame, targets: list[float], k: Optional[int]) -> None:
@@ -270,6 +245,11 @@ def plot_outputs(df: pd.DataFrame, targets: list[float], k: Optional[int]) -> No
         k_label = f"k={k}" if k is not None else "best-k"
 
         plot_data = data_sorted[data_sorted["input_preFEC_BER"] > 0].copy()
+        # Drop the K=N "no-FEC" operating point (t=0). It has energy=0 by
+        # construction and skews the x-range into ultra-low BERs, creating a
+        # distracting "tail" in vs-BER plots.
+        if "t" in plot_data.columns:
+            plot_data = plot_data[pd.to_numeric(plot_data["t"], errors="coerce").fillna(0).astype(int) > 0].copy()
         if plot_data.empty:
             continue
 
@@ -299,6 +279,7 @@ def plot_outputs(df: pd.DataFrame, targets: list[float], k: Optional[int]) -> No
         plt.title(f"{title_prefix} Energy/bit vs Input BER (targets: {targets_str})")
         plt.tight_layout()
         plt.savefig(out_dir / f"{tech.lower()}_energy_vs_ber.pdf")
+        plt.savefig(out_dir / f"{tech.lower()}_energy_vs_ber.png", dpi=180)
         plt.close()
 
         plt.figure(figsize=(8, 5))
@@ -317,12 +298,13 @@ def plot_outputs(df: pd.DataFrame, targets: list[float], k: Optional[int]) -> No
         plt.title(f"{title_prefix} Rate vs Input BER (targets: {targets_str})")
         plt.tight_layout()
         plt.savefig(out_dir / f"{tech.lower()}_rate_vs_ber.pdf")
+        plt.savefig(out_dir / f"{tech.lower()}_rate_vs_ber.png", dpi=180)
         plt.close()
 
 
 def main() -> None:
     args = parse_args()
-    targets_input = sorted(set(args.targets)) if args.targets else [1e-15, 1e-30]
+    targets_input = sorted(set(args.targets)) if args.targets else [1e-15, 1e-27]
     selection, targets = load_or_generate_selection(args, targets_input)
     dataset = build_dataset(selection)
     if dataset.empty:

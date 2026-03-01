@@ -10,8 +10,8 @@ is written only once across runs).
 Example usage::
 
     python3 scripts/run_sweep_parallel.py \
-        --config config/sweep_configs_asap7.txt \
-        --out-root data/asap7_sweep \
+        --config config/sweep_code_n86_asap7.txt \
+        --out-root data/asap7_code_sweep \
         --num-workers 4
 
 Additional ``dc_shell`` ``-x"set ..."`` options can be supplied via
@@ -135,6 +135,8 @@ def build_run_label(line: str) -> str:
     gf_width = int(toks[2])
     clock_ps = float(toks[3])
     lib_dir = toks[4] if len(toks) >= 5 else ""
+    if lib_dir in ("-", "DEFAULT"):
+        lib_dir = ""
     top = toks[5] if len(toks) >= 6 else "rs_encoder_wrapper"
     clk_ns = clock_ps / 1000.0
     corner = Path(lib_dir).name if lib_dir else "lib"

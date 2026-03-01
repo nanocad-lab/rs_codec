@@ -1,93 +1,96 @@
-RS Codec Synthesis Sweep (Synopsys DC)
+# RS Codec Synthesis Sweeps (Synopsys Design Compiler)
 
-Overview
-- Runs multi-config synthesis for encoder/decoder/syndrome blocks using Design Compiler.
-- Reads `config/sweep_configs_asap7.txt`, compiles per line, and writes power/area/timing reports.
-- GF column is the symbol bit width (e.g., 4 => GF(2^4)=GF16).
+This repo includes a multi-configuration **Synopsys Design Compiler** sweep flow to extract
+**area / power / timing** for RS-FEC blocks (`rs_encoder_wrapper`, `rs_syndrome`, `rs_decoder`, etc.).
 
-Environment Setup (tcsh/csh)
-- setenv SNPS "/w/apps3/Synopsys"
-- source $SNPS/Design_Complier/vS-2021.06-SP4/SETUP  
-- source $SNPS/Library_Compiler/vT-2022.03-SP4/SETUP
+## Environment setup
 
-Environment Setup (bash/zsh)
-- export SNPS="/w/apps3/Synopsys"
-- source "$SNPS/Design_Complier/vS-2021.06-SP4/SETUP"
-- source "$SNPS/Library_Compiler/vT-2022.03-SP4/SETUP"
+```bash
+# Example (bash/zsh); adjust for your Synopsys install.
+export SNPS="/path/to/Synopsys"
+source "$SNPS/Design_Complier/vS-2021.06-SP4/SETUP"
+```
 
-Config Files
-- ASAP7: `config/sweep_configs_asap7.txt`
-- Nangate45: `config/sweep_configs_nangate45.txt`
-- Format: `N K GF_WIDTH clock_ps [library_dir] [top]`
-  - `N`: codeword length (e.g., 15, 31, 63)
-  - `K`: info length (e.g., 11, 21, 51)
-  - `GF_WIDTH`: symbol bit width (2..10). Example: 4 => GF(2^4)=GF16
-  - `clock_ps`: target clock period in picoseconds (e.g., 2000.0)
-  - `library_dir`: path containing compiled `.db` libraries
-  - `top`: one of `rs_encoder_wrapper`, `rs_syndrome`, `rs_decoder_plus_syndrome` (alias of `rs_decoder`)
+## Config files (paper defaults)
 
-Example Lines
-- 15 11 4 2000.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_encoder_wrapper
-- 15 11 4 2000.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_syndrome
-- 15 11 4 2000.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_decoder_plus_syndrome
+Code sweeps (vary `K` at a fixed clock period):
+- ASAP7: `config/sweep_code_n86_asap7.txt`
+- NanGate45: `config/sweep_code_n86_nangate45.txt`
 
-Run the Sweep
-- ASAP7:
-  - dc_shell -f scripts/run_asap7.tcl \
-      -x "set CONFIG_FILE config/sweep_configs_asap7.txt" \
-      -x "set OUT_ROOT data/asap7_sweep"
-- Nangate45 (convenience wrapper):
-  - dc_shell -f scripts/run_nangate45.tcl
-- Parallel workers:
-  - python3 scripts/run_sweep_parallel.py \
-      --config config/sweep_configs_asap7.txt \
-      --out-root data/asap7_sweep \
-      --num-workers 4
-  - The helper script reads the requested configuration file, removes comments
-    and blank lines, and then distributes the remaining entries to each worker
-    in a round-robin order. Worker 0 gets the 1st, (n+1)th, (2n+1)th, … entry,
-    worker 1 gets the 2nd, (n+2)th, … entry, and so on, where ``n`` is
-    ``--num-workers`` (clamped to the number of runnable configurations). Each
-    worker runs ``dc_shell`` with its assigned subset and writes a temporary
-    ``summary.workerX.csv``. When all workers finish, the script appends those
-    summaries into ``summary.csv`` under ``--out-root`` (header is written once
-    and repeated runs will accumulate rows without overwriting existing data).
+Frequency sweeps (vary clock period for a single code point):
+- ASAP7: `config/sweep_freq_n86_asap7.txt`
+- NanGate45: `config/sweep_freq_n86_nangate45.txt`
 
-Outputs
-- Per-run directory: `data/asap7_sweep/Nxx_Kyy_GF<W>_TT2Tnnn_CLKm.nns_<corner>_<top>/`
-  - `generated/`: run-specific `generic_types.vhd` and wrapper (if used)
+### Config format
+
+Whitespace-separated, `#` for comments:
+
+`N K GF_WIDTH clock_ps [library_dir] [top]`
+
+Notes:
+- `GF_WIDTH` is the **symbol bit width** (e.g. `8` ⇒ GF(2^8)=GF256).
+- `clock_ps` is the target clock period in **picoseconds**.
+- Set token 5 (`library_dir`) to `-` and pass `DEFAULT_LIB_DIR` via `dc_shell -x` (or via `--define` in the parallel runner).
+
+Example:
+
+`86 82 8 800.0 - rs_decoder`
+
+## Run the sweep
+
+ASAP7 code sweep (default wrapper):
+
+```bash
+dc_shell -f scripts/run_asap7.tcl \
+  -x "set DEFAULT_LIB_DIR /path/to/asap7/TT"
+```
+
+NanGate45 code sweep (default wrapper):
+
+```bash
+dc_shell -f scripts/run_nangate45.tcl \
+  -x "set DEFAULT_LIB_DIR /path/to/NanGate45/db"
+```
+
+Override the config / output root (example: ASAP7 freq sweep):
+
+```bash
+dc_shell -f scripts/run_asap7.tcl \
+  -x "set CONFIG_FILE config/sweep_freq_n86_asap7.txt" \
+  -x "set OUT_ROOT data/asap7_freq_sweep" \
+  -x "set DEFAULT_LIB_DIR /path/to/asap7/TT"
+```
+
+### Parallel workers
+
+```bash
+python3 scripts/run_sweep_parallel.py \
+  --config config/sweep_code_n86_asap7.txt \
+  --out-root data/asap7_code_sweep \
+  --num-workers 4 \
+  --define DEFAULT_LIB_DIR=/path/to/asap7/TT
+```
+
+## Outputs
+
+- Per-run directory: `<OUT_ROOT>/<label>/` (default: `data/<tech>_code_sweep/<label>/`)
+  - `generated/`: run-specific `generic_types.vhd` and substituted RS_GF variants
   - `.WORK/`: DC work library
-  - `reports/`: `*_qor.rep`, `*_timing.rep`, `*_power.rep`, `*_area.rep`, `*_clock.rep`, `*_pathgroup.rep`
+  - `reports/`: `*_timing.rep`, `*_power.rep`, `*_area.rep`, etc.
   - Netlist and constraints: `<top>.netlist.v`, `<top>.sdc`, `<top>.compile.ddc`
- - Summary CSV: `<OUT_ROOT>/summary.csv`
-   - Columns: `label,top,N,K,GF_WIDTH,CLK_NS,area,wns,total_dyn_mw`
+- Summary CSV: `<OUT_ROOT>/summary.csv`
+  - Columns: `label,top,N,K,GF_WIDTH,CLK_NS,area,wns,total_dyn_mw`
 
-Blocks Supported
-- `rs_encoder_wrapper`: encoder + syndrome unit wrapper; generics `N`, `K`, `RS_GF` set from config.
-- `rs_syndrome`: requires `WORD_LENGTH` (= GF_WIDTH), `TWO_TIMES_T` (= N-K); the sweep script derives these.
-- `rs_decoder_plus_syndrome`: alias of `rs_decoder` (decoder integrates syndrome internally).
+## Supported tops
 
-Library Notes
-- The script loads only compiled `.db` files in the supplied `library_dir` into `link_library` and `target_library` (it intentionally ignores `.lib`).
-- ASAP7: point to a corner directory (e.g., `.../LIB/CCS/TT`).
-- Nangate45: point to `.../NanGate45/db`.
+- `rs_encoder_wrapper`
+- `rs_encoder`
+- `rs_decoder`
+- `rs_syndrome`
+- `rs_syndrome_unit`
 
-Power Modeling Assumptions
-- Random data on `i_symbol*` inputs: static_probability=0.5, toggle_rate=0.5/period (per ns).
-- Standard clock; reset held inactive.
-- Control/handshake inputs held steady: `i_valid*`/`i_consume*` high; `i_start_codeword*`, `i_end_codeword*`, FIFO-full flags low.
-- Power is reported with `-analysis_effort medium`.
+## Troubleshooting
 
-Troubleshooting
-- `dc_shell: command not found`: source the DC setup — see Environment Setup (optional step).
-- `Library dir not found` or `No .db found`: verify `library_dir` in config or set `DEFAULT_LIB_DIR` via `-x`.
-- `Elaborate failed for top ...`: ensure `top` is one of the supported names; `rs_decoder_plus_syndrome` maps to `rs_decoder`.
-- `Can't find port 'clk'/'rst'`: your top must expose `clk`/`rst`. All supported tops do.
-
-One-off Quick Test
-- Create a minimal config file (e.g., `config/sweep_one.txt`):
-  - 15 11 4 2000.0 /w/ee.00/puneet/aaronyen/asap7/asap7sc7p5t_28/LIB/CCS/TT rs_encoder_wrapper
-- Run:
-  - dc_shell -f scripts/run_asap7.tcl \
-      -x "set CONFIG_FILE config/sweep_one.txt" \
-      -x "set OUT_ROOT data/asap7_sweep_test"
+- `dc_shell: command not found`: source your DC setup script (see above).
+- `Library dir not found` / `No .db found`: check `DEFAULT_LIB_DIR` (and that it contains compiled `.db` files).
+- `Can't find port 'clk'/'rst'`: the top must expose `clk` and `rst` (all supported tops do).

@@ -1,119 +1,113 @@
 # RS Codec Synthesis Configs
 # Format: N K GF_WIDTH clock_ps [library_dir] [top]
+#
+# Notes:
+# - Set token 5 (library_dir) to "-" and pass `DEFAULT_LIB_DIR` via dc_shell -x
+#   (or via `scripts/run_sweep_parallel.py --define DEFAULT_LIB_DIR=...`).
 
-# Worst-case FEC analysed: 1.00e-03 -> 1.00e-30
-
-# RS(86,40), GF256 (t=23)
-86 40 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 40 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 40 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
-
-# RS(86,42), GF256 (t=22)
-86 42 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 42 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 42 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+# Worst-case FEC analysed: 1.00e-03 -> 1.00e-27
 
 # RS(86,44), GF256 (t=21)
-86 44 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 44 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 44 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 44 8 2222.2 - rs_encoder_wrapper
+86 44 8 2222.2 - rs_syndrome
+86 44 8 2222.2 - rs_decoder
 
 # RS(86,46), GF256 (t=20)
-86 46 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 46 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 46 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 46 8 2222.2 - rs_encoder_wrapper
+86 46 8 2222.2 - rs_syndrome
+86 46 8 2222.2 - rs_decoder
 
 # RS(86,48), GF256 (t=19)
-86 48 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 48 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 48 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 48 8 2222.2 - rs_encoder_wrapper
+86 48 8 2222.2 - rs_syndrome
+86 48 8 2222.2 - rs_decoder
 
 # RS(86,50), GF256 (t=18)
-86 50 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 50 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 50 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 50 8 2222.2 - rs_encoder_wrapper
+86 50 8 2222.2 - rs_syndrome
+86 50 8 2222.2 - rs_decoder
 
 # RS(86,52), GF256 (t=17)
-86 52 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 52 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 52 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 52 8 2222.2 - rs_encoder_wrapper
+86 52 8 2222.2 - rs_syndrome
+86 52 8 2222.2 - rs_decoder
 
 # RS(86,54), GF256 (t=16)
-86 54 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 54 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 54 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 54 8 2222.2 - rs_encoder_wrapper
+86 54 8 2222.2 - rs_syndrome
+86 54 8 2222.2 - rs_decoder
 
 # RS(86,56), GF256 (t=15)
-86 56 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 56 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 56 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 56 8 2222.2 - rs_encoder_wrapper
+86 56 8 2222.2 - rs_syndrome
+86 56 8 2222.2 - rs_decoder
 
 # RS(86,58), GF256 (t=14)
-86 58 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 58 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 58 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 58 8 2222.2 - rs_encoder_wrapper
+86 58 8 2222.2 - rs_syndrome
+86 58 8 2222.2 - rs_decoder
 
 # RS(86,60), GF256 (t=13)
-86 60 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 60 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 60 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 60 8 2222.2 - rs_encoder_wrapper
+86 60 8 2222.2 - rs_syndrome
+86 60 8 2222.2 - rs_decoder
 
 # RS(86,62), GF256 (t=12)
-86 62 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 62 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 62 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 62 8 2222.2 - rs_encoder_wrapper
+86 62 8 2222.2 - rs_syndrome
+86 62 8 2222.2 - rs_decoder
 
 # RS(86,64), GF256 (t=11)
-86 64 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 64 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 64 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 64 8 2222.2 - rs_encoder_wrapper
+86 64 8 2222.2 - rs_syndrome
+86 64 8 2222.2 - rs_decoder
 
 # RS(86,66), GF256 (t=10)
-86 66 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 66 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 66 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 66 8 2222.2 - rs_encoder_wrapper
+86 66 8 2222.2 - rs_syndrome
+86 66 8 2222.2 - rs_decoder
 
 # RS(86,68), GF256 (t=9)
-86 68 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 68 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 68 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 68 8 2222.2 - rs_encoder_wrapper
+86 68 8 2222.2 - rs_syndrome
+86 68 8 2222.2 - rs_decoder
 
 # RS(86,70), GF256 (t=8)
-86 70 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 70 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 70 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 70 8 2222.2 - rs_encoder_wrapper
+86 70 8 2222.2 - rs_syndrome
+86 70 8 2222.2 - rs_decoder
 
 # RS(86,72), GF256 (t=7)
-86 72 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 72 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 72 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 72 8 2222.2 - rs_encoder_wrapper
+86 72 8 2222.2 - rs_syndrome
+86 72 8 2222.2 - rs_decoder
 
 # RS(86,74), GF256 (t=6)
-86 74 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 74 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 74 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 74 8 2222.2 - rs_encoder_wrapper
+86 74 8 2222.2 - rs_syndrome
+86 74 8 2222.2 - rs_decoder
 
 # RS(86,76), GF256 (t=5)
-86 76 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 76 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 76 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 76 8 2222.2 - rs_encoder_wrapper
+86 76 8 2222.2 - rs_syndrome
+86 76 8 2222.2 - rs_decoder
 
 # RS(86,78), GF256 (t=4)
-86 78 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 78 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 78 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 78 8 2222.2 - rs_encoder_wrapper
+86 78 8 2222.2 - rs_syndrome
+86 78 8 2222.2 - rs_decoder
 
 # RS(86,80), GF256 (t=3)
-86 80 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 80 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 80 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 80 8 2222.2 - rs_encoder_wrapper
+86 80 8 2222.2 - rs_syndrome
+86 80 8 2222.2 - rs_decoder
 
 # RS(86,82), GF256 (t=2)
-86 82 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 82 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 82 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 82 8 2222.2 - rs_encoder_wrapper
+86 82 8 2222.2 - rs_syndrome
+86 82 8 2222.2 - rs_decoder
 
 # RS(86,84), GF256 (t=1)
-86 84 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_encoder_wrapper
-86 84 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_syndrome
-86 84 8 2222.2 /w/ee.00/puneet/aaronyen/NanGate45-Synopsys-Enablement/NanGate45/db rs_decoder
+86 84 8 2222.2 - rs_encoder_wrapper
+86 84 8 2222.2 - rs_syndrome
+86 84 8 2222.2 - rs_decoder
